@@ -1,7 +1,3 @@
-[submodule "3rdparty/qtbase"]
-	path = 3rdparty/qtbase
-	url = https://github.com/qt/qtbase.git
-	branch = 6.11.2
 [submodule "3rdparty/mpv"]
 	path = 3rdparty/mpv
 	url = https://github.com/mpv-player/mpv.git
