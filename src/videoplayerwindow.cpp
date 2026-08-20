@@ -1,11 +1,17 @@
 #include "videoplayerwindow.hpp"
 #include <QDebug>
 
-VideoPlayerWindow::VideoPlayerWindow(QWidget *parent)
-    : QWidget(parent), mpv(nullptr)
+// Callback para que mpv le avise al bucle de eventos de Qt sin bloquear el hilo principal
+static void wakeup(void* ctx) {
+    auto* notifier = static_cast<QSocketNotifier*>(ctx);
+    QMetaObject::invokeMethod(notifier, "setEnabled", Q_ARG(bool, true));
+}
+
+VideoPlayerWindow::VideoPlayerWindow(QWidget* parent)
+    : QWidget(parent), mpv(nullptr), mpvNotifier(nullptr)
 {
-    setWindowTitle("IPTV Plus - Reproductor");
-    resize(800, 450);
+    setAttribute(Qt::WA_NativeWindow, true);
+    setAttribute(Qt::WA_DontCreateNativeAncestors, true);
     setStyleSheet("background-color: black;");
 
     initMpv();
@@ -20,30 +26,81 @@ VideoPlayerWindow::~VideoPlayerWindow() {
 void VideoPlayerWindow::initMpv() {
     mpv = mpv_create();
     if (!mpv) {
-        qCritical() << "No se pudo crear la instancia de mpv.";
+        qCritical() << "[VideoPlayerWindow] No se pudo crear la instancia de mpv.";
         return;
     }
 
-    // Usar la ventana de este Widget para renderizar el video
+    mpv_set_option_string(mpv, "terminal", "yes");
+    mpv_set_option_string(mpv, "msg-level", "all=v");
+    mpv_set_option_string(mpv, "vo", "gpu");
+    mpv_set_option_string(mpv, "user-agent", "Mozilla/5.0");
+    mpv_set_option_string(mpv, "tls-verify", "no");
+
     int64_t wid = static_cast<int64_t>(winId());
     mpv_set_option(mpv, "wid", MPV_FORMAT_INT64, &wid);
 
     if (mpv_initialize(mpv) < 0) {
-        qCritical() << "No se pudo inicializar mpv.";
+        qCritical() << "[VideoPlayerWindow] No se pudo inicializar mpv.";
         return;
+    }
+
+    // Solicitar logs internos de mpv
+    mpv_request_log_messages(mpv, "info");
+
+    // Integrar la cola de eventos de MPV con el Event Loop de Qt
+    mpvNotifier = new QSocketNotifier(0, QSocketNotifier::Read, this);
+    mpvNotifier->setEnabled(false);
+    connect(mpvNotifier, &QSocketNotifier::activated, this, &VideoPlayerWindow::onMpvEvents);
+    mpv_set_wakeup_callback(mpv, wakeup, mpvNotifier);
+
+    qDebug() << "[VideoPlayerWindow] Instancia MPV inicializada correctamente.";
+}
+
+void VideoPlayerWindow::playMedia(const QString& url) {
+    if (!mpv) {
+        qWarning() << "[VideoPlayerWindow] No se puede reproducir: la instancia MPV no existe.";
+        return;
+    }
+
+    qDebug() << "[VideoPlayerWindow] Enviando orden de reproducción para URL:" << url;
+
+    const char* cmd[] = { "loadfile", url.toUtf8().constData(), "replace", nullptr };
+    int status = mpv_command_async(mpv, 0, cmd);
+
+    if (status < 0) {
+        qCritical() << "[VideoPlayerWindow] Error enviando el comando a mpv:" << status;
     }
 }
 
-void VideoPlayerWindow::playMedia(const QString &url) {
-    if (!mpv) return;
+void VideoPlayerWindow::onMpvEvents() {
+    while (mpv) {
+        mpv_event* event = mpv_wait_event(mpv, 0);
+        if (event->event_id == MPV_EVENT_NONE) break;
 
-    const char *cmd[] = {"loadfile", url.toUtf8().constData(), nullptr};
-    mpv_command_async(mpv, 0, cmd);
+        switch (event->event_id) {
+        case MPV_EVENT_LOG_MESSAGE: {
+            auto msg = static_cast<mpv_event_log_message*>(event->data);
+            QString text = QString::fromUtf8(msg->text).trimmed();
+            if (!text.isEmpty()) {
+                qDebug() << "[MPV]" << msg->prefix << ":" << text;
+            }
+            break;
+        }
+        case MPV_EVENT_END_FILE: {
+            auto eef = static_cast<mpv_event_end_file*>(event->data);
+            qCritical() << "[MPV] Finalizó reproducción o falló. Razón code:" << eef->reason << "| Error:" << eef->error;
+            break;
+        }
+        default:
+            break;
+        }
+    }
 }
 
 void VideoPlayerWindow::stopMedia() {
     if (!mpv) return;
 
-    const char *cmd[] = {"stop", nullptr};
+    qDebug() << "[VideoPlayerWindow] Deteniendo reproducción...";
+    const char* cmd[] = { "stop", nullptr };
     mpv_command_async(mpv, 0, cmd);
 }

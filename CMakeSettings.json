@@ -1,9 +1,9 @@
 ﻿{
   "configurations": [
     {
-      "name": "x64-Debug",
+      "name": "Release",
       "generator": "Ninja",
-      "configurationType": "Debug",
+      "configurationType": "Release",
       "inheritEnvironments": [ "msvc_x64_x64" ],
       "buildRoot": "${projectDir}\\build\\${name}",
       "installRoot": "${projectDir}\\out\\install\\${name}",

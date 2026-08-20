@@ -2,6 +2,7 @@
 #define VIDEOPLAYERWINDOW_HPP
 
 #include <QWidget>
+#include <QSocketNotifier>
 #include <mpv/client.h>
 
 class VideoPlayerWindow : public QWidget {
@@ -14,8 +15,12 @@ public:
     void playMedia(const QString &url);
     void stopMedia();
 
+private slots:
+	void onMpvEvents();
+
 private:
     mpv_handle *mpv;
+    QSocketNotifier* mpvNotifier;
 
     void initMpv();
 };
