@@ -1,0 +1,53 @@
+cmake_minimum_required(VERSION 3.16)
+project(iptvPlus VERSION 0.1.0 LANGUAGES CXX C)
+
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+if(MSVC)
+    add_compile_options(/Zc:__cplusplus)
+endif()
+
+set(CMAKE_AUTOMOC ON)
+set(CMAKE_AUTOUIC ON)
+set(CMAKE_AUTORCC ON)
+
+set(THIRDPARTY_DIR "${CMAKE_CURRENT_SOURCE_DIR}/3rdparty")
+set(CMAKE_PREFIX_PATH "C:/Qt/6.11.2/msvc2022_64" ${CMAKE_PREFIX_PATH})
+
+# Dependencias
+find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets)
+
+# Salida del binario
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/build")
+
+set(PROJECT_SOURCES
+    src/main.cpp
+    src/mainwindow.cpp
+    include/mainwindow.hpp
+    src/videoplayerwindow.cpp
+    include/videoplayerwindow.hpp
+)
+
+add_executable(${PROJECT_NAME} WIN32 ${PROJECT_SOURCES})
+
+
+target_include_directories(${PROJECT_NAME} PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/include"
+    "${THIRDPARTY_DIR}/mpv/include"
+)
+
+# Enlazar la librería explícitamente
+target_link_libraries(${PROJECT_NAME} PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    "${THIRDPARTY_DIR}/mpv/libmpv.dll.a"
+)
+
+# Copiar la DLL automáticamente a la carpeta build/ al compilar
+add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+    "${THIRDPARTY_DIR}/mpv/libmpv-2.dll"
+    "$<TARGET_FILE_DIR:${PROJECT_NAME}>"
+)

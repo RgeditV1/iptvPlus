@@ -1,3 +1,7 @@
 [submodule "3rdparty/iptv"]
 	path = 3rdparty/iptv
 	url = https://github.com/iptv-org/iptv.git
+
+[submodule "3rdparty/vcpkg"]
+	path = 3rdparty/vcpkg
+	url = https://github.com/microsoft/vcpkg.git

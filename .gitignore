@@ -1,5 +1,6 @@
 # Custom
 .vs
+vcpkg_installed
 
 # Prerequisites
 *.d
