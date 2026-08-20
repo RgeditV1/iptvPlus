@@ -4,6 +4,10 @@ project(iptvPlus VERSION 0.1.0 LANGUAGES CXX C)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+if(NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Choose Build Type" FORCE)
+endif()
+
 if(MSVC)
     add_compile_options(/Zc:__cplusplus)
 endif()
@@ -51,3 +55,13 @@ add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
     "${THIRDPARTY_DIR}/mpv/libmpv-2.dll"
     "$<TARGET_FILE_DIR:${PROJECT_NAME}>"
 )
+
+# Automatizar windeployqt al finalizar la compilación
+find_program(WINDEPLOYQT_EXECUTABLE windeployqt HINTS "C:/Qt/6.11.2/msvc2022_64/bin")
+
+if(WINDEPLOYQT_EXECUTABLE)
+    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+        COMMAND "${WINDEPLOYQT_EXECUTABLE}" "$<TARGET_FILE:${PROJECT_NAME}>"
+        COMMENT "Desplegando dependencias de Qt con windeployqt..."
+    )
+endif()
