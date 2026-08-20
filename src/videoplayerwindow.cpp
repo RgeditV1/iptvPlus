@@ -53,20 +53,35 @@ void VideoPlayerWindow::initMpv() {
     qDebug() << "[VideoPlayerWindow] Instancia MPV inicializada correctamente.";
 }
 
-void VideoPlayerWindow::playMedia(const QString& url) {
+void VideoPlayerWindow::playMedia(const QString& url)
+{
     if (!mpv) {
-        qWarning() << "[VideoPlayerWindow] No se puede reproducir: la instancia MPV no existe.";
+        qWarning()
+            << "[VideoPlayerWindow] No se puede reproducir:"
+            << "la instancia MPV no existe.";
         return;
     }
 
-    qDebug() << "[VideoPlayerWindow] Enviando orden de reproducción para URL:" << url;
+    qDebug()
+        << "[VideoPlayerWindow] Enviando orden de reproducción para URL:"
+        << url;
 
-    const char* cmd[] = { "loadfile", url.toUtf8().constData(), "replace", nullptr };
-    // int status = mpv_command_async(mpv, 0, cmd);
+    QByteArray urlData = url.toUtf8();
+
+    const char* cmd[] = {
+        "loadfile",
+        urlData.constData(),
+        "replace",
+        nullptr
+    };
+
     int status = mpv_command(mpv, cmd);
 
     if (status < 0) {
-        qCritical() << "[VideoPlayerWindow] Error enviando el comando a mpv:" << status;
+        qCritical()
+            << "[VideoPlayerWindow] Error enviando el comando a mpv:"
+            << status
+            << mpv_error_string(status);
     }
 }
 
