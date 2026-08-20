@@ -2,7 +2,7 @@
 #define VIDEOPLAYERWINDOW_HPP
 
 #include <QWidget>
-#include <QSocketNotifier>
+#include <QTimer>
 #include <mpv/client.h>
 
 class VideoPlayerWindow : public QWidget {
@@ -20,7 +20,7 @@ private slots:
 
 private:
     mpv_handle *mpv;
-    QSocketNotifier* mpvNotifier;
+    QTimer* mpvTimer;
 
     void initMpv();
 };

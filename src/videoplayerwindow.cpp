@@ -1,14 +1,8 @@
 #include "videoplayerwindow.hpp"
 #include <QDebug>
 
-// Callback para que mpv le avise al bucle de eventos de Qt sin bloquear el hilo principal
-static void wakeup(void* ctx) {
-    auto* notifier = static_cast<QSocketNotifier*>(ctx);
-    QMetaObject::invokeMethod(notifier, "setEnabled", Q_ARG(bool, true));
-}
-
 VideoPlayerWindow::VideoPlayerWindow(QWidget* parent)
-    : QWidget(parent), mpv(nullptr), mpvNotifier(nullptr)
+    : QWidget(parent), mpv(nullptr), mpvTimer(nullptr)
 {
     setAttribute(Qt::WA_NativeWindow, true);
     setAttribute(Qt::WA_DontCreateNativeAncestors, true);
@@ -33,6 +27,7 @@ void VideoPlayerWindow::initMpv() {
     mpv_set_option_string(mpv, "terminal", "yes");
     mpv_set_option_string(mpv, "msg-level", "all=v");
     mpv_set_option_string(mpv, "vo", "gpu");
+    mpv_set_option_string(mpv, "gpu-context", "d3d11");
     mpv_set_option_string(mpv, "user-agent", "Mozilla/5.0");
     mpv_set_option_string(mpv, "tls-verify", "no");
 
@@ -47,11 +42,13 @@ void VideoPlayerWindow::initMpv() {
     // Solicitar logs internos de mpv
     mpv_request_log_messages(mpv, "info");
 
-    // Integrar la cola de eventos de MPV con el Event Loop de Qt
-    mpvNotifier = new QSocketNotifier(0, QSocketNotifier::Read, this);
-    mpvNotifier->setEnabled(false);
-    connect(mpvNotifier, &QSocketNotifier::activated, this, &VideoPlayerWindow::onMpvEvents);
-    mpv_set_wakeup_callback(mpv, wakeup, mpvNotifier);
+    // Procesar periódicamente los eventos de mpv
+    mpvTimer = new QTimer(this);
+
+    connect(mpvTimer, &QTimer::timeout,
+        this, &VideoPlayerWindow::onMpvEvents);
+
+    mpvTimer->start(10);
 
     qDebug() << "[VideoPlayerWindow] Instancia MPV inicializada correctamente.";
 }
@@ -65,7 +62,8 @@ void VideoPlayerWindow::playMedia(const QString& url) {
     qDebug() << "[VideoPlayerWindow] Enviando orden de reproducción para URL:" << url;
 
     const char* cmd[] = { "loadfile", url.toUtf8().constData(), "replace", nullptr };
-    int status = mpv_command_async(mpv, 0, cmd);
+    // int status = mpv_command_async(mpv, 0, cmd);
+    int status = mpv_command(mpv, cmd);
 
     if (status < 0) {
         qCritical() << "[VideoPlayerWindow] Error enviando el comando a mpv:" << status;
