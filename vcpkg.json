@@ -1,8 +1,0 @@
-{
-  "name": "iptvplus",
-  "version-string": "0.1.0",
-  "builtin-baseline": "2afcafb8922834e87a6c3845395ba0fdc1886357",
-  "dependencies": [
-    "mpv"
-  ]
-}

@@ -20,7 +20,7 @@ set(THIRDPARTY_DIR "${CMAKE_CURRENT_SOURCE_DIR}/3rdparty")
 set(CMAKE_PREFIX_PATH "C:/Qt/6.11.2/msvc2022_64" ${CMAKE_PREFIX_PATH})
 
 # Dependencias
-find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets)
+find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets Svg)
 
 # Salida del binario
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/build")
@@ -31,6 +31,7 @@ set(PROJECT_SOURCES
     include/mainwindow.hpp
     src/videoplayerwindow.cpp
     include/videoplayerwindow.hpp
+    resources.qrc
 )
 
 add_executable(${PROJECT_NAME} WIN32 ${PROJECT_SOURCES})
@@ -46,6 +47,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     Qt6::Core
     Qt6::Gui
     Qt6::Widgets
+    Qt6::Svg
     "${THIRDPARTY_DIR}/mpv/libmpv.dll.a"
 )
 
