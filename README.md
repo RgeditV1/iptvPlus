@@ -9,5 +9,6 @@ cmake --build build
 ```
 
 ### 3dpartys
-- iptv (for chanels)
 - mpv (for the reproducer)
+
+![screenshoot](/screenshoot.png "IPTV ++ Screenshoot")
