@@ -6,5 +6,6 @@
         <file>resources/icons/volume-x.svg</file>
 		<file>resources/icons/menu.svg</file>
 		<file>resources/icons/tv.svg</file>
+		<file>resources/icons/arrow-right.svg</file>
     </qresource>
 </RCC>

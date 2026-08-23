@@ -305,7 +305,7 @@ void VideoPlayerWindow::updateControls(bool show)
     if (show) {
         controlsContainer->show();
 
-        if (controlsTimer)
+        if (controlsTimer && !controlsContainer->underMouse())
             controlsTimer->start(3000);
 
         return;
@@ -329,6 +329,22 @@ bool VideoPlayerWindow::eventFilter(QObject* watched, QEvent* event)
 
     default:
         break;
+    }
+
+    if (watched == controlsContainer) {
+        if (event->type() == QEvent::Enter) {
+            // Cancelar la ocultación automática mientras el usuario navega sobre los botones
+            if (controlsTimer)
+                controlsTimer->stop();
+            updateControls(true);
+            return QWidget::eventFilter(watched, event);
+        }
+        else if (event->type() == QEvent::Leave) {
+            // Reiniciar la cuenta regresiva al salir del área de controles
+            if (controlsTimer)
+                controlsTimer->start(3000);
+            return QWidget::eventFilter(watched, event);
+        }
     }
 
     if (watched == btnVolume && event->type() == QEvent::Enter) {

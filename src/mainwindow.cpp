@@ -17,9 +17,9 @@ MainWindow::MainWindow(QWidget* parent)
 
     setupUi();
 
-    categoryAnimation = new QPropertyAnimation(categoryPanel, "maximumWidth", this);
-    categoryAnimation->setDuration(200);
-    categoryAnimation->setEasingCurve(QEasingCurve::OutCubic);
+    channelAnimation = new QPropertyAnimation(channelPanel, "maximumWidth", this);
+    channelAnimation->setDuration(200);
+    channelAnimation->setEasingCurve(QEasingCurve::OutCubic);
 
     updateNotifier = new UpdateNotifier(this);
 
@@ -28,7 +28,7 @@ MainWindow::MainWindow(QWidget* parent)
 
             currentChannels = channels;
 
-            populateCategoryPanel();
+            populateChannelPanel();
             playRandomChannel();
         });
 
@@ -39,7 +39,7 @@ MainWindow::~MainWindow() {}
 
 bool MainWindow::eventFilter(QObject* watched, QEvent* event)
 {
-    if (watched == categoryPanel ||
+    if (watched == channelPanel ||
         watched == categorySearch ||
         watched == categoryList) {
 
@@ -75,20 +75,35 @@ void MainWindow::setupUi() {
         "QWidget { background-color: #1e1e24; color: white; }"
         "QLineEdit { background-color: #2b2b36; border: 1px solid #3a3a4c; "
         "            padding: 5px; border-radius: 4px; color: white; }"
-        "QTreeWidget { background-color: #18181c; border: none; color: white; }"
-        "QTreeWidget::item { padding: 6px; border-bottom: 1px solid #282830; }"
-        "QTreeWidget::item:hover { background-color: #2a2a35; }"
-        "QTreeWidget::item:selected { background-color: #007acc; color: white; }"
+        "QTreeWidget {"
+        "    background-color: #18181c;"
+        "    border: none;"
+        "    outline: none;"
+        "    color: white;"
+        "}"
+        "QTreeWidget::item {"
+        "    padding: 8px 6px;"
+        "    border: none;"
+        "    outline: none;"
+        "    border-bottom: 1px solid #282830;" // Borde entre categorías
+        "}"
+        "QTreeWidget::item:hover {"
+        "    background-color: #2a2a35;"
+        "}"
+        /* Mantiene el azul azul vibrante activo y visible cuando el usuario hace clic en otro lado */
+        "QTreeWidget::item:selected, QTreeWidget::item:selected:!active {"
+        "    background-color: #007acc;"
+        "    color: white;"
+        "}"
     );
 
     QVBoxLayout* sidebarLayout = new QVBoxLayout(sidebarWidget);
     sidebarLayout->setContentsMargins(8, 8, 8, 8);
     sidebarLayout->setSpacing(6);
 
-
-
     // Árbol para categorías y submenús
     treeMenu = new QTreeWidget(sidebarWidget);
+    treeMenu->setColumnCount(2);
     treeMenu->setHeaderHidden(true);
     treeMenu->setIndentation(15);
     treeMenu->setIconSize(QSize(18, 18));
@@ -97,9 +112,11 @@ void MainWindow::setupUi() {
     itemCanales = new QTreeWidgetItem(treeMenu);
     itemCanales->setText(0, "Canales");
     itemCanales->setIcon(0, QIcon(":/resources/icons/tv.svg"));
+    itemCanales->setIcon(1, QIcon(":/resources/icons/arrow-right.svg"));
     itemCanales->setExpanded(false);
 
     sidebarLayout->addWidget(treeMenu);
+    treeMenu->setCurrentItem(itemCanales); // por defecto
 
     sidebarWidget->hide();
 
@@ -108,12 +125,12 @@ void MainWindow::setupUi() {
     rightLayout->setContentsMargins(0, 0, 0, 0);
     rightLayout->setSpacing(0);
 
-    categoryPanel = new QFrame(centralWidget);
-    categoryPanel->setMinimumWidth(0);
-    categoryPanel->setMaximumWidth(0);
-    categoryPanel->setFrameShape(QFrame::NoFrame);
+    channelPanel = new QFrame(centralWidget);
+    channelPanel->setMinimumWidth(0);
+    channelPanel->setMaximumWidth(0);
+    channelPanel->setFrameShape(QFrame::NoFrame);
 
-    setupCategoryPanel();
+    setupChannelPanel();
 
     // --- BARRA SUPERIOR (TOP BAR) ---
     QHBoxLayout* topBarLayout = new QHBoxLayout();
@@ -145,7 +162,7 @@ void MainWindow::setupUi() {
     rightLayout->addWidget(playerWindow, 1);
 
     mainLayout->addWidget(sidebarWidget, 0);
-    mainLayout->addWidget(categoryPanel, 0);
+    mainLayout->addWidget(channelPanel, 0);
     mainLayout->addWidget(rightWidget, 1);
 
     setCentralWidget(centralWidget);
@@ -156,32 +173,32 @@ void MainWindow::setupUi() {
     connect(btnToggleMenu, &QPushButton::clicked, this, &MainWindow::toggleSidebar);
     connect(btnOpenPlayer, &QPushButton::clicked, this, &MainWindow::openPlayer);
     connect(txtUrl, &QLineEdit::returnPressed, this, &MainWindow::openPlayer);
-    connect(categorySearch, &QLineEdit::textChanged, this, &MainWindow::filterCategoryItems);
+    connect(categorySearch, &QLineEdit::textChanged, this, &MainWindow::filterChannelItems);
     connect(treeMenu, &QTreeWidget::itemClicked, this, &MainWindow::onItemClicked);
 
 }
 
-void MainWindow::toggleCategoryPanel()
+void MainWindow::toggleChannelPanel()
 {
-    categoryAnimation->stop();
+    channelAnimation->stop();
 
-    const int currentWidth = categoryPanel->width();
+    const int currentWidth = channelPanel->width();
     const int targetWidth = (currentWidth > 0) ? 0 : 280;
 
-    categoryAnimation->setStartValue(currentWidth);
-    categoryAnimation->setEndValue(targetWidth);
+    channelAnimation->setStartValue(currentWidth);
+    channelAnimation->setEndValue(targetWidth);
 
-    categoryAnimation->start();
+    channelAnimation->start();
 }
 
-void MainWindow::setupCategoryPanel()
+void MainWindow::setupChannelPanel()
 {
-    QVBoxLayout* layout = new QVBoxLayout(categoryPanel);
+    QVBoxLayout* layout = new QVBoxLayout(channelPanel);
 
     layout->setContentsMargins(8, 8, 8, 8);
     layout->setSpacing(6);
 
-    categorySearch = new QLineEdit(categoryPanel);
+    categorySearch = new QLineEdit(channelPanel);
 
     categorySearch->setPlaceholderText(
         "Buscar canales..."
@@ -189,7 +206,7 @@ void MainWindow::setupCategoryPanel()
 
     channelModel = new ChannelListModel(this);
 
-    categoryList = new QListView(categoryPanel);
+    categoryList = new QListView(channelPanel);
 
     categoryList->setModel(channelModel);
 
@@ -216,7 +233,7 @@ void MainWindow::setupCategoryPanel()
 
     categorySearch->installEventFilter(this);
     categoryList->installEventFilter(this);
-    categoryPanel->installEventFilter(this);
+    channelPanel->installEventFilter(this);
 
     connect(
         categoryList,
@@ -247,7 +264,7 @@ void MainWindow::onItemClicked(QTreeWidgetItem* item, int column)
         return;
 
     if (item == itemCanales) {
-        toggleCategoryPanel();
+        toggleChannelPanel();
         return;
     }
 
@@ -260,10 +277,16 @@ void MainWindow::onItemClicked(QTreeWidgetItem* item, int column)
 }
 
 void MainWindow::toggleSidebar() {
-    sidebarWidget->setVisible(!sidebarWidget->isVisible());
+    bool willBeVisible = !sidebarWidget->isVisible();
+
+    if (!willBeVisible && channelPanel->maximumWidth() > 0) {
+        toggleChannelPanel();
+    }
+
+    sidebarWidget->setVisible(willBeVisible);
 }
 
-void MainWindow::populateCategoryPanel()
+void MainWindow::populateChannelPanel()
 {
     channelModel->setChannels(currentChannels);
 }
@@ -278,7 +301,7 @@ void MainWindow::playRandomChannel() {
     openPlayer();
 }
 
-void MainWindow::filterCategoryItems(
+void MainWindow::filterChannelItems(
     const QString& text)
 {
     channelModel->filter(text);

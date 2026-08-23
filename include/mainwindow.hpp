@@ -33,8 +33,8 @@ protected:
 private slots:
     void openPlayer();
     void toggleSidebar();
-    void toggleCategoryPanel();
-    void filterCategoryItems(const QString& text);
+    void toggleChannelPanel();
+    void filterChannelItems(const QString& text);
     void onItemClicked(QTreeWidgetItem* item, int column);
 
 private:
@@ -46,13 +46,13 @@ private:
     QTreeWidget* treeMenu;
     QTreeWidgetItem* itemCanales;
 
-    QFrame* categoryPanel;
+    QFrame* channelPanel;
     QLineEdit* categorySearch;
 
     QListView* categoryList;
     ChannelListModel* channelModel;
 
-    QPropertyAnimation* categoryAnimation;
+    QPropertyAnimation* channelAnimation;
 
     VideoPlayerWindow* playerWindow;
     M3UParser m3uParser;
@@ -60,8 +60,8 @@ private:
 
     UpdateNotifier* updateNotifier;
 
-    void setupCategoryPanel();
-    void populateCategoryPanel();
+    void setupChannelPanel();
+    void populateChannelPanel();
 
     void setupUi();
     void playRandomChannel();
