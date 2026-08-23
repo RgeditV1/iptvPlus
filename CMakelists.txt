@@ -28,9 +28,11 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/build")
 set(PROJECT_SOURCES
     src/main.cpp
     src/mainwindow.cpp
-    include/mainwindow.hpp
     src/videoplayerwindow.cpp
-    include/videoplayerwindow.hpp
+    src/m3uparser.cpp
+    include/m3uparser.hpp
+    include/mainwindow.hpp
+    include/videoplayerwindow.hpp 
     resources.qrc
 )
 
