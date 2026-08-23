@@ -1,6 +1,8 @@
 #ifndef MAINWINDOW_HPP
 #define MAINWINDOW_HPP
 
+#include "update.hpp"
+
 #include <QMainWindow>
 #include <QTreeWidget>
 #include <QIcon>
@@ -17,8 +19,6 @@ class MainWindow : public QMainWindow {
 public:
     explicit MainWindow(QWidget* parent = nullptr);
     ~MainWindow();
-
-    void loadChannelsFromFolder(const QString& dirPath);
 
 private slots:
     void openPlayer();
@@ -39,6 +39,8 @@ private:
     VideoPlayerWindow* playerWindow;
     M3UParser m3uParser;
     QList<M3UItem> currentChannels;
+
+    UpdateNotifier* updateNotifier;
 
     void setupUi();
     void populateChannelSubmenu();

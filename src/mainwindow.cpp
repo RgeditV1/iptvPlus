@@ -15,7 +15,16 @@ MainWindow::MainWindow(QWidget* parent)
     resize(950, 550);
 
     setupUi();
-    loadChannelsFromFolder("./3rdparty/iptv/streams");
+
+    updateNotifier = new UpdateNotifier(this);
+
+    connect(updateNotifier, &UpdateNotifier::remoteChannelsLoaded,
+        this, [this](const QList<M3UItem>& channels) {
+            this->currentChannels = channels;
+            populateChannelSubmenu();
+        });
+
+    updateNotifier->fetchRemoteStreams();
 }
 
 MainWindow::~MainWindow() {}
@@ -81,7 +90,7 @@ void MainWindow::setupUi() {
     btnToggleMenu->setIcon(QIcon(":/resources/icons/menu.svg"));
     btnToggleMenu->setIconSize(QSize(24, 24));
     btnToggleMenu->setCursor(Qt::PointingHandCursor);
-    btnToggleMenu->setToolTip("Abrir/Cerrar Menú");
+    btnToggleMenu->setToolTip("Menu");
 
     txtUrl = new QLineEdit(this);
     txtUrl->setPlaceholderText("Ingresa la URL del stream .m3u8 aquí...");
@@ -113,11 +122,6 @@ void MainWindow::setupUi() {
 
 void MainWindow::toggleSidebar() {
     sidebarWidget->setVisible(!sidebarWidget->isVisible());
-}
-
-void MainWindow::loadChannelsFromFolder(const QString& dirPath) {
-    currentChannels = m3uParser.parseDirectory(dirPath);
-    populateChannelSubmenu();
 }
 
 void MainWindow::populateChannelSubmenu() {

@@ -3,7 +3,6 @@
 
 #include <QString>
 #include <QList>
-#include <QDir>
 
 struct M3UItem {
     QString tvgId;
@@ -15,9 +14,7 @@ class M3UParser {
 public:
     M3UParser() = default;
 
-    QList<M3UItem> parseFile(const QString& filePath);
-
-    QList<M3UItem> parseDirectory(const QString& directoryPath, bool recursive = true);
+    QList<M3UItem> parseContent(const QString& content);
 };
 
 #endif // M3UPARSER_HPP
