@@ -30,6 +30,8 @@ set(PROJECT_SOURCES
     src/mainwindow.cpp
     src/videoplayerwindow.cpp
     src/m3uparser.cpp
+    src/channellistmodel.cpp
+    include/channellistmodel.hpp
     include/mainwindow.hpp
     include/videoplayerwindow.hpp
     include/m3uparser.hpp
@@ -52,6 +54,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     Qt6::Widgets
     Qt6::Svg
     Qt6::Network
+    Qt6::EntryPointPrivate
     "${THIRDPARTY_DIR}/mpv/libmpv.dll.a"
 )
 

@@ -3,9 +3,10 @@
 
 #include <QPushButton>
 #include <QLineEdit>
+#include <QScrollBar>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
-#include <QHeaderView>
+#include <QEasingCurve>
 #include <QDebug>
 
 MainWindow::MainWindow(QWidget* parent)
@@ -16,18 +17,48 @@ MainWindow::MainWindow(QWidget* parent)
 
     setupUi();
 
+    categoryAnimation = new QPropertyAnimation(categoryPanel, "maximumWidth", this);
+    categoryAnimation->setDuration(200);
+    categoryAnimation->setEasingCurve(QEasingCurve::OutCubic);
+
     updateNotifier = new UpdateNotifier(this);
 
     connect(updateNotifier, &UpdateNotifier::remoteChannelsLoaded,
         this, [this](const QList<M3UItem>& channels) {
-            this->currentChannels = channels;
-            populateChannelSubmenu();
+
+            currentChannels = channels;
+
+            populateCategoryPanel();
+            playRandomChannel();
         });
 
     updateNotifier->fetchRemoteStreams();
 }
 
 MainWindow::~MainWindow() {}
+
+bool MainWindow::eventFilter(QObject* watched, QEvent* event)
+{
+    if (watched == categoryPanel ||
+        watched == categorySearch ||
+        watched == categoryList) {
+
+        if (event->type() == QEvent::Enter) {
+
+            categoryList->setVerticalScrollBarPolicy(
+                Qt::ScrollBarAsNeeded
+            );
+        }
+        else if (event->type() == QEvent::Leave) {
+
+            categoryList->setVerticalScrollBarPolicy(
+                Qt::ScrollBarAlwaysOff
+            );
+        }
+    }
+
+    return QMainWindow::eventFilter(watched, event);
+}
 
 void MainWindow::setupUi() {
     QWidget* centralWidget = new QWidget(this);
@@ -36,7 +67,7 @@ void MainWindow::setupUi() {
     mainLayout->setSpacing(0);
 
     // =========================================================
-    // 1. PANEL LATERAL / MENÚ DESPLEGABLE CON SUBMENÚS
+    // 1. PANEL LATERAL
     // =========================================================
     sidebarWidget = new QWidget(this);
     sidebarWidget->setFixedWidth(260);
@@ -54,8 +85,7 @@ void MainWindow::setupUi() {
     sidebarLayout->setContentsMargins(8, 8, 8, 8);
     sidebarLayout->setSpacing(6);
 
-    txtSearchChannel = new QLineEdit(sidebarWidget);
-    txtSearchChannel->setPlaceholderText("Buscar en canales...");
+
 
     // Árbol para categorías y submenús
     treeMenu = new QTreeWidget(sidebarWidget);
@@ -67,30 +97,35 @@ void MainWindow::setupUi() {
     itemCanales = new QTreeWidgetItem(treeMenu);
     itemCanales->setText(0, "Canales");
     itemCanales->setIcon(0, QIcon(":/resources/icons/tv.svg"));
-    itemCanales->setExpanded(true);
+    itemCanales->setExpanded(false);
 
-    sidebarLayout->addWidget(txtSearchChannel);
     sidebarLayout->addWidget(treeMenu);
 
     sidebarWidget->hide();
 
-    // =========================================================
-    // 2. PANEL DERECHO (REPRODUCTOR Y CONTROLES)
-    // =========================================================
     QWidget* rightWidget = new QWidget(this);
     QVBoxLayout* rightLayout = new QVBoxLayout(rightWidget);
     rightLayout->setContentsMargins(0, 0, 0, 0);
+    rightLayout->setSpacing(0);
 
-    playerWindow = new VideoPlayerWindow(this);
+    categoryPanel = new QFrame(centralWidget);
+    categoryPanel->setMinimumWidth(0);
+    categoryPanel->setMaximumWidth(0);
+    categoryPanel->setFrameShape(QFrame::NoFrame);
 
-    QHBoxLayout* controlsLayout = new QHBoxLayout();
-    controlsLayout->setContentsMargins(8, 6, 8, 6);
+    setupCategoryPanel();
+
+    // --- BARRA SUPERIOR (TOP BAR) ---
+    QHBoxLayout* topBarLayout = new QHBoxLayout();
+    topBarLayout->setContentsMargins(8, 6, 8, 6);
+    topBarLayout->setSpacing(8);
 
     btnToggleMenu = new QPushButton(this);
     btnToggleMenu->setIcon(QIcon(":/resources/icons/menu.svg"));
     btnToggleMenu->setIconSize(QSize(24, 24));
     btnToggleMenu->setCursor(Qt::PointingHandCursor);
     btnToggleMenu->setToolTip("Menu");
+    btnToggleMenu->setFixedSize(36, 36);
 
     txtUrl = new QLineEdit(this);
     txtUrl->setPlaceholderText("Ingresa la URL del stream .m3u8 aquí...");
@@ -98,14 +133,19 @@ void MainWindow::setupUi() {
     btnOpenPlayer = new QPushButton("Reproducir Canal", this);
     btnOpenPlayer->setCursor(Qt::PointingHandCursor);
 
-    controlsLayout->addWidget(btnToggleMenu);
-    controlsLayout->addWidget(txtUrl);
-    controlsLayout->addWidget(btnOpenPlayer);
+    topBarLayout->addWidget(btnToggleMenu);
+    topBarLayout->addWidget(txtUrl);
+    topBarLayout->addWidget(btnOpenPlayer);
 
+    // --- REPRODUCTOR ---
+    playerWindow = new VideoPlayerWindow(this);
+
+    // Añadir barra superior y el reproductor ocupando todo el resto de espacio
+    rightLayout->addLayout(topBarLayout, 0);
     rightLayout->addWidget(playerWindow, 1);
-    rightLayout->addLayout(controlsLayout, 0);
 
     mainLayout->addWidget(sidebarWidget, 0);
+    mainLayout->addWidget(categoryPanel, 0);
     mainLayout->addWidget(rightWidget, 1);
 
     setCentralWidget(centralWidget);
@@ -116,40 +156,100 @@ void MainWindow::setupUi() {
     connect(btnToggleMenu, &QPushButton::clicked, this, &MainWindow::toggleSidebar);
     connect(btnOpenPlayer, &QPushButton::clicked, this, &MainWindow::openPlayer);
     connect(txtUrl, &QLineEdit::returnPressed, this, &MainWindow::openPlayer);
-    connect(txtSearchChannel, &QLineEdit::textChanged, this, &MainWindow::filterChannels);
+    connect(categorySearch, &QLineEdit::textChanged, this, &MainWindow::filterCategoryItems);
     connect(treeMenu, &QTreeWidget::itemClicked, this, &MainWindow::onItemClicked);
+
 }
 
-void MainWindow::toggleSidebar() {
-    sidebarWidget->setVisible(!sidebarWidget->isVisible());
+void MainWindow::toggleCategoryPanel()
+{
+    categoryAnimation->stop();
+
+    const int currentWidth = categoryPanel->width();
+    const int targetWidth = (currentWidth > 0) ? 0 : 280;
+
+    categoryAnimation->setStartValue(currentWidth);
+    categoryAnimation->setEndValue(targetWidth);
+
+    categoryAnimation->start();
 }
 
-void MainWindow::populateChannelSubmenu() {
-    qDeleteAll(itemCanales->takeChildren());
+void MainWindow::setupCategoryPanel()
+{
+    QVBoxLayout* layout = new QVBoxLayout(categoryPanel);
 
-    QIcon channelIcon(":/resources/icons/play-circle.svg");
+    layout->setContentsMargins(8, 8, 8, 8);
+    layout->setSpacing(6);
 
-    for (const auto& channel : currentChannels) {
-        QString displayText = channel.title.isEmpty() ? channel.url : channel.title;
+    categorySearch = new QLineEdit(categoryPanel);
 
-        QTreeWidgetItem* subItem = new QTreeWidgetItem(itemCanales);
-        subItem->setText(0, displayText);
-        subItem->setIcon(0, channelIcon);
-        subItem->setData(0, Qt::UserRole, channel.url);
-    }
+    categorySearch->setPlaceholderText(
+        "Buscar canales..."
+    );
+
+    channelModel = new ChannelListModel(this);
+
+    categoryList = new QListView(categoryPanel);
+
+    categoryList->setModel(channelModel);
+
+    categoryList->setVerticalScrollBarPolicy(
+        Qt::ScrollBarAlwaysOff
+    );
+
+    categoryList->setHorizontalScrollBarPolicy(
+        Qt::ScrollBarAlwaysOff
+    );
+
+    categoryList->setIconSize(
+        QSize(18, 18)
+    );
+
+    categoryList->setSelectionMode(
+        QAbstractItemView::SingleSelection
+    );
+
+    categoryList->setUniformItemSizes(true);
+
+    layout->addWidget(categorySearch);
+    layout->addWidget(categoryList);
+
+    categorySearch->installEventFilter(this);
+    categoryList->installEventFilter(this);
+    categoryPanel->installEventFilter(this);
+
+    connect(
+        categoryList,
+        &QListView::clicked,
+        this,
+        [this](const QModelIndex& index) {
+
+            if (!index.isValid())
+                return;
+
+            const QString url =
+                index.data(Qt::UserRole).toString();
+
+            if (url.isEmpty())
+                return;
+
+            txtUrl->setText(url);
+            openPlayer();
+        }
+    );
 }
 
-void MainWindow::filterChannels(const QString& text) {
-    for (int i = 0; i < itemCanales->childCount(); ++i) {
-        QTreeWidgetItem* child = itemCanales->child(i);
-        bool matches = child->text(0).contains(text, Qt::CaseInsensitive);
-        child->setHidden(!matches);
-    }
-}
-
-void MainWindow::onItemClicked(QTreeWidgetItem* item, int column) {
+void MainWindow::onItemClicked(QTreeWidgetItem* item, int column)
+{
     Q_UNUSED(column);
-    if (!item) return;
+
+    if (!item)
+        return;
+
+    if (item == itemCanales) {
+        toggleCategoryPanel();
+        return;
+    }
 
     QString url = item->data(0, Qt::UserRole).toString();
 
@@ -157,6 +257,31 @@ void MainWindow::onItemClicked(QTreeWidgetItem* item, int column) {
         txtUrl->setText(url);
         openPlayer();
     }
+}
+
+void MainWindow::toggleSidebar() {
+    sidebarWidget->setVisible(!sidebarWidget->isVisible());
+}
+
+void MainWindow::populateCategoryPanel()
+{
+    channelModel->setChannels(currentChannels);
+}
+
+void MainWindow::playRandomChannel() {
+    if (currentChannels.isEmpty()) return;
+
+    int randomIndex = QRandomGenerator::global()->bounded(currentChannels.size());
+    const M3UItem& randomChannel = currentChannels.at(randomIndex);
+
+    txtUrl->setText(randomChannel.url);
+    openPlayer();
+}
+
+void MainWindow::filterCategoryItems(
+    const QString& text)
+{
+    channelModel->filter(text);
 }
 
 void MainWindow::openPlayer() {

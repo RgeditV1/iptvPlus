@@ -2,11 +2,18 @@
 #define MAINWINDOW_HPP
 
 #include "update.hpp"
+#include "m3uparser.hpp"
+#include "channellistmodel.hpp"
 
 #include <QMainWindow>
 #include <QTreeWidget>
+#include <QListView>
+#include <QTimer>
 #include <QIcon>
-#include "m3uparser.hpp"
+#include <QFrame>
+#include <QPropertyAnimation>
+#include <QListWidget>
+#include <QRandomGenerator>
 
 class VideoPlayerWindow;
 class QLineEdit;
@@ -20,10 +27,14 @@ public:
     explicit MainWindow(QWidget* parent = nullptr);
     ~MainWindow();
 
+protected:
+    bool eventFilter(QObject* watched, QEvent* event) override;
+
 private slots:
     void openPlayer();
     void toggleSidebar();
-    void filterChannels(const QString& text);
+    void toggleCategoryPanel();
+    void filterCategoryItems(const QString& text);
     void onItemClicked(QTreeWidgetItem* item, int column);
 
 private:
@@ -32,9 +43,16 @@ private:
     QPushButton* btnToggleMenu;
 
     QWidget* sidebarWidget;
-    QLineEdit* txtSearchChannel;
     QTreeWidget* treeMenu;
     QTreeWidgetItem* itemCanales;
+
+    QFrame* categoryPanel;
+    QLineEdit* categorySearch;
+
+    QListView* categoryList;
+    ChannelListModel* channelModel;
+
+    QPropertyAnimation* categoryAnimation;
 
     VideoPlayerWindow* playerWindow;
     M3UParser m3uParser;
@@ -42,8 +60,11 @@ private:
 
     UpdateNotifier* updateNotifier;
 
+    void setupCategoryPanel();
+    void populateCategoryPanel();
+
     void setupUi();
-    void populateChannelSubmenu();
+    void playRandomChannel();
 };
 
 #endif // MAINWINDOW_HPP

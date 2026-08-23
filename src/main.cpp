@@ -1,4 +1,5 @@
 #include <QApplication>
+#include <QtGlobal>
 #include <QFile>
 #include <QTextStream>
 #include <QDateTime>

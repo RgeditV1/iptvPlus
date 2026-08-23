@@ -365,7 +365,7 @@ void VideoPlayerWindow::playMedia(const QString& url)
         nullptr
     };
 
-    int status = mpv_command(mpv, cmd);
+    int status = mpv_command_async(mpv, 0, cmd);
 
     if (status < 0) {
         qCritical() << "[VideoPlayerWindow] Error enviando el comando a mpv:" << status << mpv_error_string(status);
