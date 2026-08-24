@@ -190,13 +190,35 @@ void MainWindow::setupUi() {
             if (!index.isValid())
                 return;
 
-            const QString url = index.data(Qt::UserRole).toString(); //[cite: 5, 7]
+            const QString url = index.data(Qt::UserRole).toString();
 
             if (url.isEmpty())
                 return;
 
-            txtUrl->setText(url); //[cite: 7]
-            playerWindow->playChannelAt(index.row()); // Usamos row para mantener el estado sincronizado[cite: 5, 7]
+            txtUrl->setText(url);
+            playerWindow->playChannelAt(index.row());
+        }
+    );
+    connect( // Sincronizacion con la lista
+        playerWindow,
+        &VideoPlayerWindow::channelChanged,
+        this,
+        [this](int row) {
+
+            if (!categoryList->model())
+                return;
+
+            QModelIndex index = categoryList->model()->index(row, 0);
+
+            if (!index.isValid())
+                return;
+
+            categoryList->setCurrentIndex(index);
+            categoryList->scrollTo(
+                index,
+                QAbstractItemView::PositionAtCenter
+            );
+			txtUrl->setText(index.data(Qt::UserRole).toString());
         }
     );
 

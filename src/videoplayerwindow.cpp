@@ -212,6 +212,7 @@ void VideoPlayerWindow::playChannelAt(int row)
     currentChannelRow = row;
     qDebug() << "[VideoPlayerWindow] Reproduciendo canal:" << item->title << "URL:" << item->url;
     playMedia(item->url);
+    emit channelChanged(row);
 }
 
 void VideoPlayerWindow::playNextChannel()

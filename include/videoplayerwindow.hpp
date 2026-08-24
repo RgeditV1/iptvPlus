@@ -39,6 +39,9 @@ private slots:
     void playPreviousChannel();
     void playNextChannel();
 
+signals:
+	void channelChanged(int row);
+
 private:
     mpv_handle* mpv;
     QTimer* mpvTimer;
