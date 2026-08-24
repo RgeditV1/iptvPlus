@@ -11,6 +11,7 @@
 #include <QMouseEvent>
 
 #include <mpv/client.h>
+#include "channellistmodel.hpp"
 
 class VideoPlayerWindow : public QWidget {
     Q_OBJECT
@@ -22,6 +23,10 @@ public:
     void playMedia(const QString& url);
     void stopMedia();
 
+    void setModel(ChannelListModel* model);
+
+    void playChannelAt(int row);
+
 protected:
     bool eventFilter(QObject* watched, QEvent* event) override;
 
@@ -31,6 +36,8 @@ private slots:
     void togglePlayPause();
     void setVolume(int value);
     void togleMute();
+    void playPreviousChannel();
+    void playNextChannel();
 
 private:
     mpv_handle* mpv;
@@ -42,6 +49,9 @@ private:
     QPushButton* btnPlayPause;
     QPushButton* btnStop;
 
+    QPushButton* btnPrevious;
+    QPushButton* btnNext;
+
     // Contenedor y controles de volumen alineados
     QWidget* volumeContainer;
     QToolButton* btnVolume;
@@ -52,6 +62,9 @@ private:
 
     int volume;
     int previousVolume;
+
+    ChannelListModel* channelModel; // <--- Puntero al modelo[cite: 3]
+    int currentChannelRow;
 
     // Ocultamiento automático de la barra de controles
     QTimer* controlsTimer;

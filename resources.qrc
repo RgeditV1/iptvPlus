@@ -10,5 +10,7 @@
 		<file>resources/icons/tv.svg</file>
 		<file>resources/icons/arrow-right.svg</file>
 		<file>resources/icons/arrow-down.svg</file>
+		<file>resources/icons/skip-forward.svg</file>
+		<file>resources/icons/skip-back.svg</file>
     </qresource>
 </RCC>

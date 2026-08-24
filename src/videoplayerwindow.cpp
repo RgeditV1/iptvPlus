@@ -10,6 +10,8 @@ VideoPlayerWindow::VideoPlayerWindow(QWidget* parent)
     mpvTimer(nullptr),
     videoContainer(nullptr),
     controlsContainer(nullptr),
+    btnPrevious(nullptr),
+    btnNext(nullptr),
     btnPlayPause(nullptr),
     btnStop(nullptr),
     volumeContainer(nullptr),
@@ -19,6 +21,8 @@ VideoPlayerWindow::VideoPlayerWindow(QWidget* parent)
     isMuted(false),
     volume(100),
     previousVolume(100),
+    channelModel(nullptr),
+	currentChannelRow(-1), // sin canal por defecto
     controlsTimer(nullptr)
 {
     setMouseTracking(true);
@@ -105,6 +109,14 @@ void VideoPlayerWindow::setupUi()
     btnStop = new QPushButton("Stop", controlsContainer);
     btnStop->setCursor(Qt::PointingHandCursor);
 
+    btnNext = new QPushButton(controlsContainer);
+    btnNext->setCursor(Qt::PointingHandCursor);
+    btnNext->setIcon(QIcon(":/resources/icons/skip-forward.svg"));
+
+    btnPrevious = new QPushButton(controlsContainer);
+    btnPrevious->setCursor(Qt::PointingHandCursor);
+    btnPrevious->setIcon(QIcon(":/resources/icons/skip-back.svg"));
+
     // =========================================================
     // CONTENEDOR DE VOLUMEN (ICONO Y SLIDER EN LÍNEA)
     // =========================================================
@@ -136,8 +148,9 @@ void VideoPlayerWindow::setupUi()
     // =========================================================
     // AGREGAR AL LAYOUT DE CONTROLES
     // =========================================================
-
+    controlsLayout->addWidget(btnPrevious);
     controlsLayout->addWidget(btnPlayPause);
+    controlsLayout->addWidget(btnNext);
     controlsLayout->addWidget(btnStop);
     controlsLayout->addWidget(volumeContainer);
     controlsLayout->addStretch();
@@ -157,6 +170,8 @@ void VideoPlayerWindow::setupUi()
     controlsContainer->installEventFilter(this);
     btnPlayPause->installEventFilter(this);
     btnStop->installEventFilter(this);
+    btnPrevious->installEventFilter(this);
+    btnNext->installEventFilter(this);
     volumeContainer->installEventFilter(this);
     btnVolume->installEventFilter(this);
     sliderVolume->installEventFilter(this);
@@ -169,8 +184,62 @@ void VideoPlayerWindow::setupUi()
     connect(btnStop, &QPushButton::clicked, this, &VideoPlayerWindow::stopMedia);
     connect(sliderVolume, &QSlider::valueChanged, this, &VideoPlayerWindow::setVolume);
     connect(btnVolume, &QToolButton::clicked, this, &VideoPlayerWindow::togleMute);
+    connect(btnPrevious, &QPushButton::clicked, this, &VideoPlayerWindow::playPreviousChannel);
+    connect(btnNext, &QPushButton::clicked, this, &VideoPlayerWindow::playNextChannel);
 
     updateVolumeIcon();
+}
+
+void VideoPlayerWindow::setModel(ChannelListModel* model)
+{
+    channelModel = model;
+    currentChannelRow = -1;
+}
+
+void VideoPlayerWindow::playChannelAt(int row)
+{
+    if (!channelModel) {
+        qWarning() << "[VideoPlayerWindow] No hay un ChannelListModel asignado.";
+        return;
+    }
+
+    const M3UItem* item = channelModel->channelAt(row); // Obtiene el ítem de la fila[cite: 3, 5]
+    if (!item) {
+        qWarning() << "[VideoPlayerWindow] Fila inválida en el modelo de canales:" << row;
+        return;
+    }
+
+    currentChannelRow = row;
+    qDebug() << "[VideoPlayerWindow] Reproduciendo canal:" << item->title << "URL:" << item->url;
+    playMedia(item->url);
+}
+
+void VideoPlayerWindow::playNextChannel()
+{
+    if (!channelModel || channelModel->rowCount() == 0) { // Consulta el total del modelo[cite: 3, 5]
+        qWarning() << "[VideoPlayerWindow] El modelo de canales está vacío o no asignado.";
+        return;
+    }
+
+    int totalRows = channelModel->rowCount(); //[cite: 3, 5]
+    // Avanzar a la siguiente fila (con loop circular)
+    int nextRow = (currentChannelRow + 1) % totalRows;
+
+    playChannelAt(nextRow);
+}
+
+void VideoPlayerWindow::playPreviousChannel()
+{
+    if (!channelModel || channelModel->rowCount() == 0) { //[cite: 3, 5]
+        qWarning() << "[VideoPlayerWindow] El modelo de canales está vacío o no asignado.";
+        return;
+    }
+
+    int totalRows = channelModel->rowCount(); //[cite: 3, 5]
+    // Retroceder a la fila anterior (con loop circular)
+    int prevRow = (currentChannelRow - 1 + totalRows) % totalRows;
+
+    playChannelAt(prevRow);
 }
 
 void VideoPlayerWindow::initMpv() {

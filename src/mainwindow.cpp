@@ -132,6 +132,7 @@ void MainWindow::setupUi() {
     channelPanel = new QFrame(centralWidget);
     channelPanel->setMinimumWidth(0);
     channelPanel->setMaximumWidth(0);
+    channelPanel->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Expanding);
     channelPanel->setFrameShape(QFrame::NoFrame);
 
     setupChannelPanel();
@@ -161,7 +162,8 @@ void MainWindow::setupUi() {
     // --- REPRODUCTOR ---
     playerWindow = new VideoPlayerWindow(this);
 
-    // Añadir barra superior y el reproductor ocupando todo el resto de espacio
+    playerWindow->setModel(channelModel);
+
     rightLayout->addLayout(topBarLayout, 0);
     rightLayout->addWidget(playerWindow, 1);
 
@@ -179,6 +181,24 @@ void MainWindow::setupUi() {
     connect(txtUrl, &QLineEdit::returnPressed, this, &MainWindow::openPlayer);
     connect(categorySearch, &QLineEdit::textChanged, this, &MainWindow::filterChannelItems);
     connect(treeMenu, &QTreeWidget::itemClicked, this, &MainWindow::onItemClicked);
+    connect(
+        categoryList,
+        &QListView::clicked,
+        this,
+        [this](const QModelIndex& index) {
+
+            if (!index.isValid())
+                return;
+
+            const QString url = index.data(Qt::UserRole).toString(); //[cite: 5, 7]
+
+            if (url.isEmpty())
+                return;
+
+            txtUrl->setText(url); //[cite: 7]
+            playerWindow->playChannelAt(index.row()); // Usamos row para mantener el estado sincronizado[cite: 5, 7]
+        }
+    );
 
 }
 
@@ -214,6 +234,11 @@ void MainWindow::setupChannelPanel()
 
     categoryList->setModel(channelModel);
 
+    categoryList->setSizePolicy(
+        QSizePolicy::Expanding,
+        QSizePolicy::Expanding
+    );
+
     categoryList->setVerticalScrollBarPolicy(
         Qt::ScrollBarAlwaysOff
     );
@@ -238,26 +263,6 @@ void MainWindow::setupChannelPanel()
     categorySearch->installEventFilter(this);
     categoryList->installEventFilter(this);
     channelPanel->installEventFilter(this);
-
-    connect(
-        categoryList,
-        &QListView::clicked,
-        this,
-        [this](const QModelIndex& index) {
-
-            if (!index.isValid())
-                return;
-
-            const QString url =
-                index.data(Qt::UserRole).toString();
-
-            if (url.isEmpty())
-                return;
-
-            txtUrl->setText(url);
-            openPlayer();
-        }
-    );
 }
 
 void MainWindow::onItemClicked(QTreeWidgetItem* item, int column)
@@ -296,13 +301,19 @@ void MainWindow::populateChannelPanel()
 }
 
 void MainWindow::playRandomChannel() {
-    if (currentChannels.isEmpty()) return;
+    if (currentChannels.isEmpty() || !channelModel) return; //[cite: 7]
 
-    int randomIndex = QRandomGenerator::global()->bounded(currentChannels.size());
-    const M3UItem& randomChannel = currentChannels.at(randomIndex);
+    int totalRows = channelModel->rowCount(); //[cite: 3, 5]
+    if (totalRows == 0) return;
 
-    txtUrl->setText(randomChannel.url);
-    openPlayer();
+    int randomIndex = QRandomGenerator::global()->bounded(totalRows);
+
+    // Seleccionar y reproducir mediante el índice del modelo
+    const M3UItem* item = channelModel->channelAt(randomIndex); //[cite: 3, 5]
+    if (item) {
+        txtUrl->setText(item->url); //[cite: 7]
+        playerWindow->playChannelAt(randomIndex); // <--- CAMBIADO[cite: 7]
+    }
 }
 
 void MainWindow::filterChannelItems(
