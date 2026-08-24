@@ -6,6 +6,7 @@
 #include <QScrollBar>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
+#include <QHeaderView>
 #include <QEasingCurve>
 #include <QDebug>
 
@@ -70,7 +71,7 @@ void MainWindow::setupUi() {
     // 1. PANEL LATERAL
     // =========================================================
     sidebarWidget = new QWidget(this);
-    sidebarWidget->setFixedWidth(260);
+    sidebarWidget->setFixedWidth(160);
     sidebarWidget->setStyleSheet(
         "QWidget { background-color: #1e1e24; color: white; }"
         "QLineEdit { background-color: #2b2b36; border: 1px solid #3a3a4c; "
@@ -105,15 +106,18 @@ void MainWindow::setupUi() {
     treeMenu = new QTreeWidget(sidebarWidget);
     treeMenu->setColumnCount(2);
     treeMenu->setHeaderHidden(true);
-    treeMenu->setIndentation(15);
+    treeMenu->setIndentation(10);
     treeMenu->setIconSize(QSize(18, 18));
+    treeMenu->header()->setSectionResizeMode(0, QHeaderView::Fixed);
+    treeMenu->header()->setSectionResizeMode(1, QHeaderView::Fixed);
+    treeMenu->setColumnWidth(1, 16);
 
     // --- Categoría Principal: Canales ---
     itemCanales = new QTreeWidgetItem(treeMenu);
     itemCanales->setText(0, "Canales");
     itemCanales->setIcon(0, QIcon(":/resources/icons/tv.svg"));
     itemCanales->setIcon(1, QIcon(":/resources/icons/arrow-right.svg"));
-    itemCanales->setExpanded(false);
+    itemCanales->setTextAlignment(1, Qt::AlignCenter);
 
     sidebarLayout->addWidget(treeMenu);
     treeMenu->setCurrentItem(itemCanales); // por defecto

@@ -98,8 +98,9 @@ void VideoPlayerWindow::setupUi()
     controlsLayout->setContentsMargins(8, 6, 8, 6);
     controlsLayout->setSpacing(5);
 
-    btnPlayPause = new QPushButton("Pausa", controlsContainer);
+    btnPlayPause = new QPushButton(controlsContainer);
     btnPlayPause->setCursor(Qt::PointingHandCursor);
+    btnPlayPause->setIcon(QIcon(":/resources/icons/play.svg"));
 
     btnStop = new QPushButton("Stop", controlsContainer);
     btnStop->setCursor(Qt::PointingHandCursor);
@@ -224,7 +225,7 @@ void VideoPlayerWindow::togglePlayPause()
         return;
     }
 
-    btnPlayPause->setText(isPaused ? "Play" : "Pausa");
+    btnPlayPause->setIcon(isPaused ? QIcon(":/resources/icons/play.svg") : QIcon(":/resources/icons/pause.svg"));
     updateControls(true);
 }
 
@@ -388,7 +389,7 @@ void VideoPlayerWindow::playMedia(const QString& url)
     }
 
     isPaused = false;
-    btnPlayPause->setText("Pausa");
+	btnPlayPause->setIcon(QIcon(":/resources/icons/pause.svg"));
 }
 
 void VideoPlayerWindow::onMpvEvents()
@@ -453,5 +454,5 @@ void VideoPlayerWindow::stopMedia()
     }
 
     isPaused = false;
-    btnPlayPause->setText("Pausa");
+	btnPlayPause->setIcon(QIcon(":/resources/icons/play.svg"));
 }
