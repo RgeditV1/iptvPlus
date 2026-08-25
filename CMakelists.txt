@@ -17,13 +17,9 @@ set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTORCC ON)
 
 set(THIRDPARTY_DIR "${CMAKE_CURRENT_SOURCE_DIR}/3rdparty")
-set(CMAKE_PREFIX_PATH "C:/Qt/6.11.2/msvc2022_64" ${CMAKE_PREFIX_PATH})
 
 # Dependencias
 find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets Svg Network)
-
-# Salida del binario
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/build")
 
 set(PROJECT_SOURCES
     src/main.cpp
@@ -54,7 +50,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     Qt6::Widgets
     Qt6::Svg
     Qt6::Network
-    Qt6::EntryPointPrivate
+    #Qt6::EntryPointPrivate
     "${THIRDPARTY_DIR}/mpv/libmpv.dll.a"
 )
 
@@ -66,11 +62,14 @@ add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
 )
 
 # Automatizar windeployqt al finalizar la compilación
-find_program(WINDEPLOYQT_EXECUTABLE windeployqt HINTS "C:/Qt/6.11.2/msvc2022_64/bin")
+find_program(WINDEPLOYQT_EXECUTABLE windeployqt)
 
 if(WINDEPLOYQT_EXECUTABLE)
     add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-        COMMAND "${WINDEPLOYQT_EXECUTABLE}" "$<TARGET_FILE:${PROJECT_NAME}>"
-        COMMENT "Desplegando dependencias de Qt con windeployqt..."
+        COMMAND "${WINDEPLOYQT_EXECUTABLE}"
+            "$<TARGET_FILE:${PROJECT_NAME}>"
+            --release
+            --no-translations
+        COMMENT "Desplegando dependencias de Qt..."
     )
 endif()
