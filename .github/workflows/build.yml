@@ -1,0 +1,286 @@
+name: Build Windows 🪟
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+
+  pull_request:
+
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-2025
+
+    steps:
+
+      # ============================================================
+      # Checkout
+      # ============================================================
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+
+      # ============================================================
+      # Python
+      # ============================================================
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+
+      # ============================================================
+      # 7-Zip
+      # ============================================================
+
+      - name: Install 7-Zip
+        shell: powershell
+        run: |
+          choco install 7zip -y
+
+          if ($LASTEXITCODE -ne 0) {
+              Write-Error "No se pudo instalar 7-Zip"
+              exit $LASTEXITCODE
+          }
+
+
+      # ============================================================
+      # Extraer libmpv
+      # ============================================================
+
+      - name: Extract libmpv
+        shell: powershell
+        run: |
+          $mpvDir = "$env:GITHUB_WORKSPACE\3rdparty\mpv"
+          $archive = Join-Path $mpvDir "libmpv-2.zip.001"
+
+          Write-Host "Directorio mpv:"
+          Get-ChildItem $mpvDir
+
+          if (!(Test-Path $archive)) {
+              Write-Error "No se encontró:"
+              Write-Error $archive
+              exit 1
+          }
+
+          Write-Host "Extrayendo libmpv..."
+
+          & "7z.exe" x `
+            $archive `
+            "-o$mpvDir" `
+            -y
+
+          if ($LASTEXITCODE -ne 0) {
+              Write-Error "7-Zip terminó con código $LASTEXITCODE"
+              exit $LASTEXITCODE
+          }
+
+          Write-Host "Contenido después de extraer:"
+          Get-ChildItem $mpvDir -Recurse
+
+      # ============================================================
+      # Cache de Qt
+      # ============================================================
+
+      - name: Cache Qt
+        id: cache-qt
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}\Qt
+          key: qt-6.11.2-windows-msvc2022_64-qtsvg
+
+
+      # ============================================================
+      # Instalar Qt con aqtinstall (PR #1000)
+      # ============================================================
+
+      - name: Install Qt via aqt PR #1000
+        if: steps.cache-qt.outputs.cache-hit != 'true'
+        shell: powershell
+        run: |
+          python -m pip install --upgrade pip
+          pip install git+https://github.com/miurahr/aqtinstall.git@refs/pull/1000/head # por ahora, hasta solucion de bug en aqtinstall
+          aqt install-qt windows desktop 6.11.2 win64_msvc2022_64 --outputdir "${{ github.workspace }}\Qt"
+
+      # ============================================================
+      # Localizar Qt6Config.cmake
+      # ============================================================
+
+      - name: Locate Qt6
+        shell: powershell
+        run: |
+          $qtDir = "$env:GITHUB_WORKSPACE\Qt"
+
+          Write-Host "Buscando Qt6Config.cmake en:"
+          Write-Host $qtDir
+
+          $qtConfig = Get-ChildItem `
+            -Path $qtDir `
+            -Filter "Qt6Config.cmake" `
+            -Recurse `
+            -ErrorAction SilentlyContinue |
+            Select-Object -First 1
+
+          if (!$qtConfig) {
+              Write-Error "No se encontró Qt6Config.cmake"
+              Write-Host "Contenido de Qt:"
+              Get-ChildItem $qtDir -Recurse
+              exit 1
+          }
+
+          $qtCmakeDir = $qtConfig.DirectoryName
+
+          Write-Host ""
+          Write-Host "========================================"
+          Write-Host "Qt6 encontrado"
+          Write-Host "========================================"
+          Write-Host $qtCmakeDir
+          Write-Host ""
+
+          "QT6_DIR=$qtCmakeDir" >> $env:GITHUB_ENV
+
+
+      # ============================================================
+      # Verificar Qt
+      # ============================================================
+
+      - name: Verify Qt
+        shell: powershell
+        run: |
+          Write-Host "QT6_DIR:"
+          Write-Host $env:QT6_DIR
+
+          if (!(Test-Path "$env:QT6_DIR\Qt6Config.cmake")) {
+              Write-Error "Qt6Config.cmake no existe"
+              exit 1
+          }
+
+          Write-Host ""
+          Write-Host "Qt6Config.cmake encontrado correctamente."
+
+
+      # ============================================================
+      # Configurar CMake
+      # ============================================================
+
+      - name: Configure CMake
+        shell: powershell
+        run: |
+          Write-Host "Configurando CMake..."
+
+          cmake -S . -B build `
+            -G "Visual Studio 18 2026" `
+            "-DQt6_DIR=$env:QT6_DIR"
+
+          if ($LASTEXITCODE -ne 0) {
+              Write-Error "Falló la configuración de CMake"
+              exit $LASTEXITCODE
+          }
+
+
+      # ============================================================
+      # Build Release
+      # ============================================================
+
+      - name: Build
+        shell: powershell
+        run: |
+          Write-Host "Compilando IPTV Plus..."
+
+          cmake --build build `
+            --config Release `
+            --parallel
+
+          if ($LASTEXITCODE -ne 0) {
+              Write-Error "Falló la compilación"
+              exit $LASTEXITCODE
+          }
+
+
+      # ============================================================
+      # Mostrar resultado
+      # ============================================================
+
+      - name: Show build output
+        shell: powershell
+        run: |
+          Write-Host ""
+          Write-Host "========================================"
+          Write-Host "Contenido de build"
+          Write-Host "========================================"
+
+          Get-ChildItem build -Recurse
+
+
+      # ============================================================
+      # Verificar ejecutable
+      # ============================================================
+
+      - name: Verify executable
+        shell: powershell
+        run: |
+          $exe = "build\Release\iptvPlus.exe"
+
+          if (!(Test-Path $exe)) {
+              Write-Error "No se encontró iptvPlus.exe"
+              exit 1
+          }
+
+          Write-Host ""
+          Write-Host "========================================"
+          Write-Host "Ejecutable encontrado"
+          Write-Host "========================================"
+          Write-Host $exe
+
+
+      # ============================================================
+      # Empaquetar solamente en tags v*
+      # ============================================================
+
+      - name: Package
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: powershell
+        run: |
+          $releaseDir = "build\Release"
+
+          if (!(Test-Path "$releaseDir\iptvPlus.exe")) {
+              Write-Error "No se encontró iptvPlus.exe"
+              exit 1
+          }
+
+          Write-Host "Empaquetando Release..."
+
+          Compress-Archive `
+            -Path "$releaseDir\*" `
+            -DestinationPath "iptvPlus-windows-x64.zip" `
+            -Force
+
+          if (!(Test-Path "iptvPlus-windows-x64.zip")) {
+              Write-Error "No se pudo crear el ZIP"
+              exit 1
+          }
+
+          Write-Host "ZIP creado correctamente."
+
+
+      # ============================================================
+      # Publicar GitHub Release
+      # ============================================================
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: iptvPlus-windows-x64.zip
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
