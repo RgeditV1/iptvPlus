@@ -12,5 +12,6 @@
 		<file>resources/icons/arrow-down.svg</file>
 		<file>resources/icons/skip-forward.svg</file>
 		<file>resources/icons/skip-back.svg</file>
+		<file>resources/icons/play-circle.svg</file>	
     </qresource>
 </RCC>

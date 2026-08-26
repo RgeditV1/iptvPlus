@@ -7,13 +7,12 @@ Video Player for ```.m3u``` Files and Movies, Series is Coming Soon
 ```sh
 cmake -S . -B build `
   -G "Visual Studio 18 2026" `
-  "-DQt6_DIR=C:\Qt\6.11.2\msvc2022_64\lib\cmake\Qt6"
-cmake --build build --config Release # or Debug
-```
-### build
+  "-DQt6_DIR=C:\Qt\6.11.2\msvc2022_64\lib\cmake\Qt6" `
+  "-DCMAKE_INSTALL_PREFIX=build/install"
 
-```
-cmake --build build
+cmake --build build --config Release # or Debug
+cmake --install build --config Release # or Debug
+cpack --config build/CPackConfig.cmake -C Release # or Debug
 ```
 
 ### 3dpartys
