@@ -39,16 +39,15 @@ jobs:
 
 
       # ============================================================
-      # 7-Zip
+      # Dependencias del Sistema (7-Zip & NSIS)
       # ============================================================
-
-      - name: Install 7-Zip
+      - name: Install System Dependencies
         shell: powershell
         run: |
-          choco install 7zip -y
+          choco install 7zip nsis -y
 
           if ($LASTEXITCODE -ne 0) {
-              Write-Error "No se pudo instalar 7-Zip"
+              Write-Error "No se pudieron instalar las dependencias del sistema via Chocolatey"
               exit $LASTEXITCODE
           }
 
@@ -87,6 +86,7 @@ jobs:
           Write-Host "Contenido después de extraer:"
           Get-ChildItem $mpvDir -Recurse
 
+
       # ============================================================
       # Cache de Qt
       # ============================================================
@@ -96,20 +96,24 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ github.workspace }}\Qt
-          key: qt-6.11.2-windows-msvc2022_64-qtsvg
+          key: qt-6.11.2-windows-2025-msvc2022_64-qtsvg
 
 
       # ============================================================
-      # Instalar Qt con aqtinstall (PR #1000)
+      # Instalar Qt con aqtinstall
       # ============================================================
 
-      - name: Install Qt via aqt PR #1000
+      - name: Install Qt via aqtinstall
         if: steps.cache-qt.outputs.cache-hit != 'true'
         shell: powershell
         run: |
           python -m pip install --upgrade pip
-          pip install git+https://github.com/miurahr/aqtinstall.git@refs/pull/1000/head # por ahora, hasta solucion de bug en aqtinstall
-          aqt install-qt windows desktop 6.11.2 win64_msvc2022_64 --outputdir "${{ github.workspace }}\Qt"
+
+          pip install git+https://github.com/miurahr/aqtinstall.git@refs/pull/1000/head
+
+          aqt install-qt windows desktop 6.11.2 win64_msvc2022_64 `
+            --outputdir "${{ github.workspace }}\Qt"
+
 
       # ============================================================
       # Localizar Qt6Config.cmake
@@ -133,7 +137,11 @@ jobs:
           if (!$qtConfig) {
               Write-Error "No se encontró Qt6Config.cmake"
               Write-Host "Contenido de Qt:"
-              Get-ChildItem $qtDir -Recurse
+
+              if (Test-Path $qtDir) {
+                  Get-ChildItem $qtDir -Recurse
+              }
+
               exit 1
           }
 
@@ -169,6 +177,22 @@ jobs:
 
 
       # ============================================================
+      # Verificar generador de Visual Studio
+      # ============================================================
+
+      - name: Verify CMake Generator
+        shell: powershell
+        run: |
+          Write-Host "Generadores disponibles:"
+          cmake --help | Select-String "Visual Studio"
+
+          if ($LASTEXITCODE -ne 0) {
+              Write-Error "No se pudieron consultar los generadores de CMake."
+              exit $LASTEXITCODE
+          }
+
+
+      # ============================================================
       # Configurar CMake
       # ============================================================
 
@@ -179,7 +203,8 @@ jobs:
 
           cmake -S . -B build `
             -G "Visual Studio 18 2026" `
-            "-DQt6_DIR=$env:QT6_DIR"
+            "-DQt6_DIR=$env:QT6_DIR" `
+            "-DCMAKE_INSTALL_PREFIX=${{ github.workspace }}\build\install"
 
           if ($LASTEXITCODE -ne 0) {
               Write-Error "Falló la configuración de CMake"
@@ -188,99 +213,91 @@ jobs:
 
 
       # ============================================================
-      # Build Release
+      # Build
       # ============================================================
 
-      - name: Build
+      - name: Build Release
         shell: powershell
         run: |
-          Write-Host "Compilando IPTV Plus..."
+          Write-Host "Compilando proyecto en Release..."
 
-          cmake --build build `
-            --config Release `
-            --parallel
+          cmake --build build --config Release --parallel
 
           if ($LASTEXITCODE -ne 0) {
-              Write-Error "Falló la compilación"
+              Write-Error "Falló la compilación."
               exit $LASTEXITCODE
           }
 
 
       # ============================================================
-      # Mostrar resultado
+      # Install
       # ============================================================
 
-      - name: Show build output
+      - name: Install Release
         shell: powershell
         run: |
-          Write-Host ""
-          Write-Host "========================================"
-          Write-Host "Contenido de build"
-          Write-Host "========================================"
+          Write-Host "Instalando proyecto..."
 
-          Get-ChildItem build -Recurse
+          cmake --install build --config Release
 
-
-      # ============================================================
-      # Verificar ejecutable
-      # ============================================================
-
-      - name: Verify executable
-        shell: powershell
-        run: |
-          $exe = "build\Release\iptvPlus.exe"
-
-          if (!(Test-Path $exe)) {
-              Write-Error "No se encontró iptvPlus.exe"
-              exit 1
+          if ($LASTEXITCODE -ne 0) {
+              Write-Error "Falló la instalación."
+              exit $LASTEXITCODE
           }
 
           Write-Host ""
-          Write-Host "========================================"
-          Write-Host "Ejecutable encontrado"
-          Write-Host "========================================"
-          Write-Host $exe
+          Write-Host "Contenido de build/install:"
+          Get-ChildItem "${{ github.workspace }}\build\install" -Recurse
 
 
       # ============================================================
-      # Empaquetar solamente en tags v*
+      # CPack
       # ============================================================
 
-      - name: Package
-        if: startsWith(github.ref, 'refs/tags/v')
+      - name: Package with CPack
         shell: powershell
         run: |
-          $releaseDir = "build\Release"
+          Write-Host "Generando paquetes con CPack..."
 
-          if (!(Test-Path "$releaseDir\iptvPlus.exe")) {
-              Write-Error "No se encontró iptvPlus.exe"
+          cpack `
+            --config "${{ github.workspace }}\build\CPackConfig.cmake" `
+            -C Release
+
+          if ($LASTEXITCODE -ne 0) {
+              Write-Error "CPack falló."
+              exit $LASTEXITCODE
+          }
+
+          Write-Host ""
+          Write-Host "========================================"
+          Write-Host "Artefactos generados"
+          Write-Host "========================================"
+
+          $artifacts = Get-ChildItem `
+            -Path "${{ github.workspace }}" `
+            -Filter "iptvPlus-*"
+
+          if ($artifacts.Count -eq 0) {
+              Write-Error "CPack no generó ningún artefacto."
               exit 1
           }
 
-          Write-Host "Empaquetando Release..."
-
-          Compress-Archive `
-            -Path "$releaseDir\*" `
-            -DestinationPath "iptvPlus-windows-x64.zip" `
-            -Force
-
-          if (!(Test-Path "iptvPlus-windows-x64.zip")) {
-              Write-Error "No se pudo crear el ZIP"
-              exit 1
+          $artifacts | ForEach-Object {
+              Write-Host $_.FullName
           }
-
-          Write-Host "ZIP creado correctamente."
 
 
       # ============================================================
-      # Publicar GitHub Release
+      # GitHub Release
       # ============================================================
 
       - name: Create GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: iptvPlus-windows-x64.zip
+          files: |
+            iptvPlus-*.exe
+            iptvPlus-*.zip
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

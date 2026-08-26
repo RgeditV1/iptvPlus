@@ -1,6 +1,9 @@
 # Custom
 .vs
 vcpkg_installed
+*.zip
+*.nsi
+*.ini
 
 # Prerequisites
 *.d

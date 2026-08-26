@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(iptvPlus VERSION 0.1.0 LANGUAGES CXX C)
+project(iptvPlus VERSION 0.1.1 LANGUAGES CXX C)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -54,22 +54,62 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     "${THIRDPARTY_DIR}/mpv/libmpv.dll.a"
 )
 
-# Copiar la DLL automáticamente a la carpeta build/ al compilar
-add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-    "${THIRDPARTY_DIR}/mpv/libmpv-2.dll"
-    "$<TARGET_FILE_DIR:${PROJECT_NAME}>"
+include(GNUInstallDirs)
+
+install(TARGETS ${PROJECT_NAME}
+    RUNTIME DESTINATION .
 )
 
-# Automatizar windeployqt al finalizar la compilación
+# mpv
+install(FILES
+    "${THIRDPARTY_DIR}/mpv/libmpv-2.dll"
+    DESTINATION .
+)
+
+# -----------------------------------------------------------------------------
+# Qt / windeployqt
+# -----------------------------------------------------------------------------
+
 find_program(WINDEPLOYQT_EXECUTABLE windeployqt)
 
 if(WINDEPLOYQT_EXECUTABLE)
-    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-        COMMAND "${WINDEPLOYQT_EXECUTABLE}"
-            "$<TARGET_FILE:${PROJECT_NAME}>"
-            --release
-            --no-translations
-        COMMENT "Desplegando dependencias de Qt..."
-    )
+    install(CODE "
+        execute_process(
+            COMMAND \"${WINDEPLOYQT_EXECUTABLE}\"
+                    --release
+                    --no-translations
+                    \"\${CMAKE_INSTALL_PREFIX}/${PROJECT_NAME}.exe\"
+        )
+    ")
 endif()
+
+# -----------------------------------------------------------------------------
+# REDIST
+# -----------------------------------------------------------------------------
+
+set(REDIST_DIR "${CMAKE_CURRENT_SOURCE_DIR}/_redist")
+
+install(FILES
+    "${REDIST_DIR}/vcredist_v14.x64.exe"
+    "${REDIST_DIR}/vcredist_v14.x86.exe"
+    "${REDIST_DIR}/VulkanRT-Installer.exe"
+    DESTINATION "_redist"
+)
+
+# -----------------------------------------------------------------------------
+# CPACK
+# -----------------------------------------------------------------------------
+
+set(CPACK_PACKAGE_NAME "iptvPlus")
+set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")
+
+set(CPACK_GENERATOR "NSIS;ZIP")
+
+set(CPACK_NSIS_EXTRA_INSTALL_COMMANDS "
+    ExecWait '\\\"\\$INSTDIR\\\\_redist\\\\vcredist_v14.x64.exe\\\" /quiet /norestart'
+    ExecWait '\\\"\\$INSTDIR\\\\_redist\\\\vcredist_v14.x86.exe\\\" /quiet /norestart'
+    ExecWait '\\\"\\$INSTDIR\\\\_redist\\\\VulkanRT-Installer.exe\\\" /S'
+    RMDir /r '\\$INSTDIR\\\\_redist'
+")
+
+include(CPack)

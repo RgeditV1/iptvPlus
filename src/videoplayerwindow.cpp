@@ -60,6 +60,8 @@ VideoPlayerWindow::~VideoPlayerWindow()
 
 void VideoPlayerWindow::setupUi()
 {
+    this->setStyleSheet("VideoPlayerWindow { background-color: black; }");
+
     QVBoxLayout* mainLayout = new QVBoxLayout(this);
     mainLayout->setContentsMargins(0, 0, 0, 0);
     mainLayout->setSpacing(0);
@@ -80,21 +82,43 @@ void VideoPlayerWindow::setupUi()
     // =========================================================
 
     controlsContainer = new QWidget(this);
+    controlsContainer->setObjectName("controlsContainer");
+    controlsContainer->setAttribute(Qt::WA_StyledBackground, true);
     controlsContainer->setMouseTracking(true);
 
     controlsContainer->setStyleSheet(
-        "QWidget {"
-        "    background-color: rgba(45, 45, 50, 230);"
+        "#controlsContainer {"
+        "    background-color: rgba(45, 45, 50, 120);"
+        "    border: none;"
         "}"
-        "QPushButton, QToolButton {"
+
+        "#controlsContainer QPushButton,"
+        "#controlsContainer QToolButton {"
         "    color: white;"
         "    background-color: transparent;"
-        "    border-radius: 4px;"
         "    border: none;"
+        "    border-radius: 4px;"
         "    padding: 6px;"
         "}"
-        "QPushButton:hover, QToolButton:hover {"
-        "    background-color: rgba(255,255,255,40);"
+
+        "#controlsContainer QPushButton:hover,"
+        "#controlsContainer QToolButton:hover {"
+        "    background-color: rgba(255, 255, 255, 40);"
+        "}"
+
+        "#volumeContainer {"
+        "    background-color: transparent;"
+        "    border: none;"
+        "}"
+
+        "#volumeContainer QToolButton {"
+        "    background-color: transparent;"
+        "    border: none;"
+        "}"
+
+        "#volumeContainer QSlider {"
+        "    background-color: transparent;"
+        "    border: none;"
         "}"
     );
 
@@ -123,6 +147,8 @@ void VideoPlayerWindow::setupUi()
 
     volumeContainer = new QWidget(controlsContainer);
     volumeContainer->setMouseTracking(true);
+    volumeContainer->setAttribute(Qt::WA_TranslucentBackground);
+    volumeContainer->setStyleSheet("background: transparent;");
     // Ancho fijo: 32px (botón) + 5px (espacio) + 100px (slider) = 137px
     volumeContainer->setFixedSize(137, 32);
 
@@ -148,12 +174,16 @@ void VideoPlayerWindow::setupUi()
     // =========================================================
     // AGREGAR AL LAYOUT DE CONTROLES
     // =========================================================
+    controlsLayout->addStretch(1);
+
     controlsLayout->addWidget(btnPrevious);
     controlsLayout->addWidget(btnPlayPause);
     controlsLayout->addWidget(btnNext);
     controlsLayout->addWidget(btnStop);
+
+    controlsLayout->addStretch(1);
+
     controlsLayout->addWidget(volumeContainer);
-    controlsLayout->addStretch();
 
     // =========================================================
     // LAYOUT PRINCIPAL
