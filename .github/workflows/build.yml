@@ -299,11 +299,5 @@ jobs:
             iptvPlus-*.exe
             iptvPlus-*.zip
           generate_release_notes: true
-          body: |
-            ## Changelog
-      
-            Consulta el changelog completo:
-            https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md
-      
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
