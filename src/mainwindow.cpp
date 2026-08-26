@@ -149,6 +149,20 @@ void MainWindow::setupUi() {
     btnToggleMenu->setToolTip("Menu");
     btnToggleMenu->setFixedSize(36, 36);
 
+    btnToggleMenu->setStyleSheet(
+        "QPushButton {"
+        "    background-color: transparent;"
+        "    border: none;"
+        "    border-radius: 4px;"
+        "}"
+        "QPushButton:hover {"
+        "    background-color: rgba(255, 255, 255, 30);"
+        "}"
+        "QPushButton:pressed {"
+        "    background-color: rgba(255, 255, 255, 50);"
+        "}"
+    );
+
     txtUrl = new QLineEdit(this);
     txtUrl->setPlaceholderText("Ingresa la URL del stream .m3u8 aquí...");
 
