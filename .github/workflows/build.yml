@@ -39,16 +39,15 @@ jobs:
 
 
       # ============================================================
-      # 7-Zip
+      # Dependencias del Sistema (7-Zip & NSIS)
       # ============================================================
-
-      - name: Install 7-Zip
+      - name: Install System Dependencies
         shell: powershell
         run: |
-          choco install 7zip -y
+          choco install 7zip nsis -y
 
           if ($LASTEXITCODE -ne 0) {
-              Write-Error "No se pudo instalar 7-Zip"
+              Write-Error "No se pudieron instalar las dependencias del sistema via Chocolatey"
               exit $LASTEXITCODE
           }
 
@@ -113,8 +112,7 @@ jobs:
           pip install git+https://github.com/miurahr/aqtinstall.git@refs/pull/1000/head
 
           aqt install-qt windows desktop 6.11.2 win64_msvc2022_64 `
-            --outputdir "${{ github.workspace }}\Qt" `
-            --modules qtsvg
+            --outputdir "${{ github.workspace }}\Qt"
 
 
       # ============================================================
