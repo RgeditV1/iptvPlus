@@ -1,0 +1,23 @@
+[project]
+name = "iptvplus"
+version = "0.1.2"
+description = "Video Player for ```.m3u``` Files and Movies, Series is Coming Soon"
+readme = "README.md"
+authors = [
+    { name = "Rgeditv1", email = "rgeditv1@protonmail.com" }
+]
+requires-python = ">=3.14"
+dependencies = [
+    "beautifulsoup4>=4.15.0",
+    "cloudscraper>=1.2.71",
+    "curl-cffi>=0.16.2",
+    "playwright>=1.62.0",
+    "requests>=2.34.2",
+]
+
+[project.scripts]
+iptvplus = "iptvplus.main:main"
+
+[build-system]
+requires = ["uv_build>=0.12.7,<0.13.0"]
+build-backend = "uv_build"

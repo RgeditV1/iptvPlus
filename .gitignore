@@ -4,6 +4,10 @@ vcpkg_installed
 *.zip
 *.nsi
 *.ini
+__pycache__
+uv.lock
+src/iptvplus/*.txt
+src/iptvplus/*.json
 
 # Prerequisites
 *.d
