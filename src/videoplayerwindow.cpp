@@ -130,8 +130,9 @@ void VideoPlayerWindow::setupUi()
     btnPlayPause->setCursor(Qt::PointingHandCursor);
     btnPlayPause->setIcon(QIcon(":/resources/icons/play.svg"));
 
-    btnStop = new QPushButton("Stop", controlsContainer);
+    btnStop = new QPushButton(controlsContainer);
     btnStop->setCursor(Qt::PointingHandCursor);
+    btnStop->setIcon(QIcon(":/resources/icons/stop-circle.svg"));
 
     btnNext = new QPushButton(controlsContainer);
     btnNext->setCursor(Qt::PointingHandCursor);
@@ -140,6 +141,10 @@ void VideoPlayerWindow::setupUi()
     btnPrevious = new QPushButton(controlsContainer);
     btnPrevious->setCursor(Qt::PointingHandCursor);
     btnPrevious->setIcon(QIcon(":/resources/icons/skip-back.svg"));
+
+    btnFullScreen = new QPushButton(controlsContainer);
+    btnFullScreen->setCursor(Qt::PointingHandCursor);
+    btnFullScreen->setIcon(QIcon(":/resources/icons/maximize.svg"));
 
     // =========================================================
     // CONTENEDOR DE VOLUMEN (ICONO Y SLIDER EN LÍNEA)
@@ -184,6 +189,7 @@ void VideoPlayerWindow::setupUi()
     controlsLayout->addStretch(1);
 
     controlsLayout->addWidget(volumeContainer);
+    controlsLayout->addWidget(btnFullScreen);
 
     // =========================================================
     // LAYOUT PRINCIPAL
@@ -205,17 +211,19 @@ void VideoPlayerWindow::setupUi()
     volumeContainer->installEventFilter(this);
     btnVolume->installEventFilter(this);
     sliderVolume->installEventFilter(this);
+    btnFullScreen->installEventFilter(this);
 
     // =========================================================
     // CONEXIONES
     // =========================================================
 
     connect(btnPlayPause, &QPushButton::clicked, this, &VideoPlayerWindow::togglePlayPause);
-    connect(btnStop, &QPushButton::clicked, this, &VideoPlayerWindow::stopMedia);
-    connect(sliderVolume, &QSlider::valueChanged, this, &VideoPlayerWindow::setVolume);
-    connect(btnVolume, &QToolButton::clicked, this, &VideoPlayerWindow::togleMute);
+    connect(btnFullScreen, &QPushButton::clicked, this, &VideoPlayerWindow::toggleFullScreen);
     connect(btnPrevious, &QPushButton::clicked, this, &VideoPlayerWindow::playPreviousChannel);
     connect(btnNext, &QPushButton::clicked, this, &VideoPlayerWindow::playNextChannel);
+    connect(sliderVolume, &QSlider::valueChanged, this, &VideoPlayerWindow::setVolume);
+    connect(btnVolume, &QToolButton::clicked, this, &VideoPlayerWindow::togleMute);
+    connect(btnStop, &QPushButton::clicked, this, &VideoPlayerWindow::stopMedia);
 
     updateVolumeIcon();
 }
@@ -327,6 +335,27 @@ void VideoPlayerWindow::togglePlayPause()
 
     btnPlayPause->setIcon(isPaused ? QIcon(":/resources/icons/play.svg") : QIcon(":/resources/icons/pause.svg"));
     updateControls(true);
+}
+
+void VideoPlayerWindow::toggleFullScreen()
+{
+    QWidget* targetWindow = this->topLevelWidget();
+
+    bool goesFullScreen = !targetWindow->isFullScreen();
+
+    if (targetWindow->isFullScreen()) {
+        targetWindow->showNormal();
+        if (btnFullScreen) {
+            btnFullScreen->setIcon(QIcon(":/resources/icons/maximize.svg"));
+        }
+    } else {
+        targetWindow->showFullScreen();
+        if (btnFullScreen) {
+            btnFullScreen->setIcon(QIcon(":/resources/icons/minimize.svg"));
+        }
+    }
+
+    emit fullScreenToggled(goesFullScreen);
 }
 
 void VideoPlayerWindow::setVolume(int value)

@@ -109,7 +109,6 @@ set(CPACK_NSIS_EXTRA_INSTALL_COMMANDS "
     ExecWait '\\\"\\$INSTDIR\\\\_redist\\\\vcredist_v14.x64.exe\\\" /quiet /norestart'
     ExecWait '\\\"\\$INSTDIR\\\\_redist\\\\vcredist_v14.x86.exe\\\" /quiet /norestart'
     ExecWait '\\\"\\$INSTDIR\\\\_redist\\\\VulkanRT-Installer.exe\\\" /S'
-    RMDir /r '\\$INSTDIR\\\\_redist'
 ")
 
 include(CPack)

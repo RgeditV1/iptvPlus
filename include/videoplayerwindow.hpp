@@ -38,9 +38,11 @@ private slots:
     void togleMute();
     void playPreviousChannel();
     void playNextChannel();
+    void toggleFullScreen();
 
 signals:
 	void channelChanged(int row);
+    void fullScreenToggled(bool isFullScreen);
 
 private:
     mpv_handle* mpv;
@@ -54,6 +56,7 @@ private:
 
     QPushButton* btnPrevious;
     QPushButton* btnNext;
+    QPushButton* btnFullScreen;
 
     // Contenedor y controles de volumen alineados
     QWidget* volumeContainer;

@@ -36,6 +36,7 @@ private slots:
     void toggleChannelPanel();
     void filterChannelItems(const QString& text);
     void onItemClicked(QTreeWidgetItem* item, int column);
+    void onFullScreenToggled(bool isFullScreen);
 
 private:
     QLineEdit* txtUrl;
@@ -65,6 +66,9 @@ private:
 
     void setupUi();
     void playRandomChannel();
+
+    bool sidebarWasVisibleBeforeFS = false;
+    bool channelPanelWasOpenBeforeFS = false;
 };
 
 #endif // MAINWINDOW_HPP

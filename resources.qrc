@@ -4,14 +4,17 @@
         <file>resources/icons/volume-1.svg</file>
         <file>resources/icons/volume-2.svg</file>
         <file>resources/icons/volume-x.svg</file>
-		<file>resources/icons/play.svg</file>
-		<file>resources/icons/pause.svg</file>
-		<file>resources/icons/menu.svg</file>
-		<file>resources/icons/tv.svg</file>
-		<file>resources/icons/arrow-right.svg</file>
-		<file>resources/icons/arrow-down.svg</file>
-		<file>resources/icons/skip-forward.svg</file>
-		<file>resources/icons/skip-back.svg</file>
-		<file>resources/icons/play-circle.svg</file>	
+        <file>resources/icons/play.svg</file>
+        <file>resources/icons/pause.svg</file>
+        <file>resources/icons/menu.svg</file>
+        <file>resources/icons/tv.svg</file>
+        <file>resources/icons/arrow-right.svg</file>
+        <file>resources/icons/arrow-down.svg</file>
+        <file>resources/icons/skip-forward.svg</file>
+        <file>resources/icons/skip-back.svg</file>
+        <file>resources/icons/play-circle.svg</file>
+        <file>resources/icons/maximize.svg</file>
+        <file>resources/icons/minimize.svg</file>
+        <file>resources/icons/stop-circle.svg</file>
     </qresource>
 </RCC>
