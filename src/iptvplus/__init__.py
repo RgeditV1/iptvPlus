@@ -1,1 +1,1 @@
-from .scraper import search_movies
+from .scraper import search_movies, get_genres, get_by_genre
