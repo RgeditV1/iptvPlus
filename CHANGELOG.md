@@ -1,3 +1,11 @@
+# [0.1.2] - 2026-09-1
+
+### Cambio
+- color oscuro al widget principal en ``mainwindow``
+
+### Revertido
+- Icono antiguo de Menu
+
 ## [0.1.1] - 2026-08-25
 
 ### Añadido

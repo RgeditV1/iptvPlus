@@ -63,9 +63,12 @@ bool MainWindow::eventFilter(QObject* watched, QEvent* event)
 
 void MainWindow::setupUi() {
     QWidget* centralWidget = new QWidget(this);
+    centralWidget->setStyleSheet("background-color: black;");
+    
     QHBoxLayout* mainLayout = new QHBoxLayout(centralWidget);
     mainLayout->setContentsMargins(0, 0, 0, 0);
     mainLayout->setSpacing(0);
+    
 
     // =========================================================
     // 1. PANEL LATERAL
