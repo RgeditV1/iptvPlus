@@ -1,6 +1,4 @@
-#ifndef CHANNELLISTMODEL_HPP
-#define CHANNELLISTMODEL_HPP
-
+#pragma once
 #include "m3uparser.hpp"
 
 #include <QAbstractListModel>
@@ -33,5 +31,3 @@ private:
 
     QIcon channelIcon;
 };
-
-#endif // CHANNELLISTMODEL_HPP

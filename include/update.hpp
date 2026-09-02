@@ -1,5 +1,4 @@
-#ifndef UPDATE_HPP
-#define UPDATE_HPP
+#pragma once
 
 #include <QObject>
 #include <QNetworkAccessManager>
@@ -88,5 +87,3 @@ signals:
 private:
     QNetworkAccessManager* networkManager;
 };
-
-#endif // UPDATE_HPP

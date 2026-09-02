@@ -1,10 +1,11 @@
-#ifndef VIDEOPLAYERWINDOW_HPP
-#define VIDEOPLAYERWINDOW_HPP
+#pragma once
 
 #include <QWidget>
 #include <QTimer>
-#include <QPushButton>
+#include <QLabel>
 #include <QSlider>
+#include <QResizeEvent>
+#include <QPushButton>
 #include <QToolButton>
 #include <QHBoxLayout>
 #include <QVBoxLayout>
@@ -12,6 +13,8 @@
 
 #include <mpv/client.h>
 #include "channellistmodel.hpp"
+
+class LoadingSpinner;
 
 class VideoPlayerWindow : public QWidget {
     Q_OBJECT
@@ -29,6 +32,7 @@ public:
 
 protected:
     bool eventFilter(QObject* watched, QEvent* event) override;
+    void resizeEvent(QResizeEvent* event) override;
 
 private slots:
     void onMpvEvents();
@@ -54,6 +58,11 @@ private:
     QPushButton* btnPlayPause;
     QPushButton* btnStop;
 
+    QWidget* loadingOverlay;
+    LoadingSpinner* loadingSpinner;
+    QTimer* spinnerTimer;
+    
+
     QPushButton* btnPrevious;
     QPushButton* btnNext;
     QPushButton* btnFullScreen;
@@ -65,9 +74,14 @@ private:
 
     bool isPaused;
     bool isMuted;
+    bool buffering = false;
 
     int volume;
     int previousVolume;
+    int spinnerAngle;
+
+    double cacheDuration = 0.0;
+
 
     ChannelListModel* channelModel; // <--- Puntero al modelo[cite: 3]
     int currentChannelRow;
@@ -78,8 +92,26 @@ private:
     void initMpv();
     void setupUi();
 
+    void setupLoadingSpinner();
+    void setLoadingSpinnerVisible(bool visible);
+    void updateSpinner();
+
+    void updateBufferingState();
+
     void updateControls(bool show = true);
     void updateVolumeIcon();
 };
 
-#endif // VIDEOPLAYERWINDOW_HPP
+class LoadingSpinner : public QWidget
+{
+public:
+    explicit LoadingSpinner(QWidget* parent = nullptr);
+
+    void setAngle(int angle);
+
+protected:
+    void paintEvent(QPaintEvent* event) override;
+
+private:
+    int angle = 0;
+};

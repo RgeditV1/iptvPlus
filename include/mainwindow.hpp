@@ -1,5 +1,4 @@
-#ifndef MAINWINDOW_HPP
-#define MAINWINDOW_HPP
+#pragma once
 
 #include "update.hpp"
 #include "m3uparser.hpp"
@@ -70,5 +69,3 @@ private:
     bool sidebarWasVisibleBeforeFS = false;
     bool channelPanelWasOpenBeforeFS = false;
 };
-
-#endif // MAINWINDOW_HPP

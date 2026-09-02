@@ -1,5 +1,6 @@
 {
   "branch":  "main",
-  "version": "0.1.1",
+  "version": "0.1.2",
+  "changelog": "https://github.com/RgeditV1/iptvPlus/blob/main/CHANGELOG.md",
   "url": ""
 }

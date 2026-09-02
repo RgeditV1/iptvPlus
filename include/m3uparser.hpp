@@ -1,5 +1,4 @@
-#ifndef M3UPARSER_HPP
-#define M3UPARSER_HPP
+#pragma once
 
 #include <QString>
 #include <QList>
@@ -16,5 +15,3 @@ public:
 
     QList<M3UItem> parseContent(const QString& content);
 };
-
-#endif // M3UPARSER_HPP
