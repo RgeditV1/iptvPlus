@@ -1,8 +1,12 @@
 #include "videoplayerwindow.hpp"
 
+#include <cstring>
+
 #include <QApplication>
 #include  <QIcon>
 #include <QDebug>
+#include <QPainter>
+#include <QPen>
 
 VideoPlayerWindow::VideoPlayerWindow(QWidget* parent)
     : QWidget(parent),
@@ -78,6 +82,12 @@ void VideoPlayerWindow::setupUi()
     videoContainer->setStyleSheet("background-color: black;");
 
     // =========================================================
+    // CARGA DE SPINNER
+    // =========================================================
+
+    setupLoadingSpinner();
+
+    // =========================================================
     // BARRA DE CONTROLES
     // =========================================================
 
@@ -130,8 +140,9 @@ void VideoPlayerWindow::setupUi()
     btnPlayPause->setCursor(Qt::PointingHandCursor);
     btnPlayPause->setIcon(QIcon(":/resources/icons/play.svg"));
 
-    btnStop = new QPushButton("Stop", controlsContainer);
+    btnStop = new QPushButton(controlsContainer);
     btnStop->setCursor(Qt::PointingHandCursor);
+    btnStop->setIcon(QIcon(":/resources/icons/stop-circle.svg"));
 
     btnNext = new QPushButton(controlsContainer);
     btnNext->setCursor(Qt::PointingHandCursor);
@@ -140,6 +151,10 @@ void VideoPlayerWindow::setupUi()
     btnPrevious = new QPushButton(controlsContainer);
     btnPrevious->setCursor(Qt::PointingHandCursor);
     btnPrevious->setIcon(QIcon(":/resources/icons/skip-back.svg"));
+
+    btnFullScreen = new QPushButton(controlsContainer);
+    btnFullScreen->setCursor(Qt::PointingHandCursor);
+    btnFullScreen->setIcon(QIcon(":/resources/icons/maximize.svg"));
 
     // =========================================================
     // CONTENEDOR DE VOLUMEN (ICONO Y SLIDER EN LÍNEA)
@@ -184,6 +199,7 @@ void VideoPlayerWindow::setupUi()
     controlsLayout->addStretch(1);
 
     controlsLayout->addWidget(volumeContainer);
+    controlsLayout->addWidget(btnFullScreen);
 
     // =========================================================
     // LAYOUT PRINCIPAL
@@ -205,17 +221,19 @@ void VideoPlayerWindow::setupUi()
     volumeContainer->installEventFilter(this);
     btnVolume->installEventFilter(this);
     sliderVolume->installEventFilter(this);
+    btnFullScreen->installEventFilter(this);
 
     // =========================================================
     // CONEXIONES
     // =========================================================
 
     connect(btnPlayPause, &QPushButton::clicked, this, &VideoPlayerWindow::togglePlayPause);
-    connect(btnStop, &QPushButton::clicked, this, &VideoPlayerWindow::stopMedia);
-    connect(sliderVolume, &QSlider::valueChanged, this, &VideoPlayerWindow::setVolume);
-    connect(btnVolume, &QToolButton::clicked, this, &VideoPlayerWindow::togleMute);
+    connect(btnFullScreen, &QPushButton::clicked, this, &VideoPlayerWindow::toggleFullScreen);
     connect(btnPrevious, &QPushButton::clicked, this, &VideoPlayerWindow::playPreviousChannel);
     connect(btnNext, &QPushButton::clicked, this, &VideoPlayerWindow::playNextChannel);
+    connect(sliderVolume, &QSlider::valueChanged, this, &VideoPlayerWindow::setVolume);
+    connect(btnVolume, &QToolButton::clicked, this, &VideoPlayerWindow::togleMute);
+    connect(btnStop, &QPushButton::clicked, this, &VideoPlayerWindow::stopMedia);
 
     updateVolumeIcon();
 }
@@ -301,6 +319,27 @@ void VideoPlayerWindow::initMpv() {
         return;
     }
 
+    mpv_observe_property(
+        mpv,
+        0,
+        "demuxer-cache-duration",
+        MPV_FORMAT_DOUBLE
+    );
+
+    mpv_observe_property(
+        mpv,
+        0,
+        "paused",
+        MPV_FORMAT_FLAG
+    );
+
+    // Detecta cuando MPV está inactivo o cargando un recurso nuevo/red
+    mpv_observe_property(
+        mpv,
+        0,
+        "core-idle",
+        MPV_FORMAT_FLAG
+    );
     mpv_request_log_messages(mpv, "info");
 
     mpvTimer = new QTimer(this);
@@ -327,6 +366,27 @@ void VideoPlayerWindow::togglePlayPause()
 
     btnPlayPause->setIcon(isPaused ? QIcon(":/resources/icons/play.svg") : QIcon(":/resources/icons/pause.svg"));
     updateControls(true);
+}
+
+void VideoPlayerWindow::toggleFullScreen()
+{
+    QWidget* targetWindow = this->topLevelWidget();
+
+    bool goesFullScreen = !targetWindow->isFullScreen();
+
+    if (targetWindow->isFullScreen()) {
+        targetWindow->showNormal();
+        if (btnFullScreen) {
+            btnFullScreen->setIcon(QIcon(":/resources/icons/maximize.svg"));
+        }
+    } else {
+        targetWindow->showFullScreen();
+        if (btnFullScreen) {
+            btnFullScreen->setIcon(QIcon(":/resources/icons/minimize.svg"));
+        }
+    }
+
+    emit fullScreenToggled(goesFullScreen);
 }
 
 void VideoPlayerWindow::setVolume(int value)
@@ -473,6 +533,14 @@ void VideoPlayerWindow::playMedia(const QString& url)
 
     qDebug() << "[VideoPlayerWindow] Enviando orden de reproducción para URL:" << url;
 
+    isPaused = false;
+    int pauseValue = 0;
+    mpv_set_property(mpv, "pause", MPV_FORMAT_FLAG, &pauseValue);
+
+
+    buffering = true;
+    cacheDuration = 0.0;
+    setLoadingSpinnerVisible(true);
     QByteArray urlData = url.toUtf8();
 
     const char* cmd[] = {
@@ -504,6 +572,60 @@ void VideoPlayerWindow::onMpvEvents()
             break;
 
         switch (event->event_id) {
+
+        case MPV_EVENT_PROPERTY_CHANGE:
+        {
+            auto* prop = static_cast<mpv_event_property*>(event->data);
+
+            if (!prop || !prop->name)
+                break;
+
+            if (strcmp(prop->name, "demuxer-cache-duration") == 0) {
+
+                if (prop->format == MPV_FORMAT_DOUBLE && prop->data) {
+                    cacheDuration = *static_cast<double*>(prop->data);
+
+                    //qDebug() << "[MPV] Cache:"
+                     //       << cacheDuration
+                       //     << "segundos";
+
+                    updateBufferingState();
+                }
+            }
+            else if (strcmp(prop->name, "paused") == 0) {
+
+                if (prop->format == MPV_FORMAT_FLAG && prop->data) {
+                    isPaused = *static_cast<int*>(prop->data);
+
+                    updateBufferingState();
+                }
+            }
+
+            else if (strcmp(prop->name, "core-idle") == 0) {
+                if (prop->format == MPV_FORMAT_FLAG && prop->data) {
+                    bool isIdle = *static_cast<int*>(prop->data);
+                    
+                    // Si mpv entra en idle durante la carga, forzamos la visibilidad del spinner
+                    if (isIdle && !isPaused) {
+                        buffering = true;
+                        setLoadingSpinnerVisible(true);
+                    }
+                }
+            }
+
+            break;
+        }
+        
+        // Si el archivo empieza a reproducirse correctamente
+        case MPV_EVENT_PLAYBACK_RESTART:
+        {
+            // El video ha comenzado a emitir frames, si ya tenemos buffer razonable oculta el spinner
+            if (cacheDuration >= 1.0) {
+                buffering = false;
+                setLoadingSpinnerVisible(false);
+            }
+            break;
+        }
 
         case MPV_EVENT_LOG_MESSAGE:
         {
@@ -555,4 +677,150 @@ void VideoPlayerWindow::stopMedia()
 
     isPaused = false;
 	btnPlayPause->setIcon(QIcon(":/resources/icons/play.svg"));
+}
+
+void VideoPlayerWindow::updateBufferingState()
+{
+    if (!mpv)
+        return;
+
+    if (isPaused && cacheDuration > 0.0) {
+        if (buffering) {
+            buffering = false;
+            setLoadingSpinnerVisible(false);
+        }
+        return;
+    }
+
+
+    if (buffering && cacheDuration >= 2.0) {
+        buffering = false;
+        setLoadingSpinnerVisible(false);
+    }
+
+    else if (!buffering && cacheDuration < 0.5 && !isPaused) {
+        buffering = true;
+        setLoadingSpinnerVisible(true);
+    }
+}
+
+void VideoPlayerWindow::resizeEvent(QResizeEvent* event)
+{
+    QWidget::resizeEvent(event);
+
+    if (!videoContainer || !loadingOverlay || !loadingSpinner)
+        return;
+
+    loadingOverlay->setGeometry(videoContainer->rect());
+
+    loadingSpinner->move(
+        (loadingOverlay->width() - loadingSpinner->width()) / 2,
+        (loadingOverlay->height() - loadingSpinner->height()) / 2
+    );
+}
+
+void VideoPlayerWindow::setLoadingSpinnerVisible(bool visible)
+{
+    if (visible) {
+        loadingOverlay->setGeometry(videoContainer->rect());
+
+        loadingSpinner->move(
+            (loadingOverlay->width() - loadingSpinner->width()) / 2,
+            (loadingOverlay->height() - loadingSpinner->height()) / 2
+        );
+
+        loadingOverlay->show();
+        loadingOverlay->raise();
+
+        spinnerTimer->start(50);
+    }
+    else {
+        spinnerTimer->stop();
+        loadingOverlay->hide();
+    }
+}
+
+void VideoPlayerWindow::setupLoadingSpinner()
+{
+    loadingOverlay = new QWidget(videoContainer);
+
+    loadingOverlay->setAttribute(Qt::WA_TransparentForMouseEvents);
+    loadingOverlay->setStyleSheet(
+        "#loadingOverlay {"
+        "    background: transparent;"
+        "}"
+    );
+
+    loadingSpinner = new LoadingSpinner(loadingOverlay);
+
+    spinnerAngle = 0;
+
+    spinnerTimer = new QTimer(this);
+
+    connect(spinnerTimer, &QTimer::timeout,
+            this, &VideoPlayerWindow::updateSpinner);
+
+    loadingOverlay->hide();
+}
+
+LoadingSpinner::LoadingSpinner(QWidget* parent)
+    : QWidget(parent)
+{
+    setAttribute(Qt::WA_TransparentForMouseEvents);
+    setFixedSize(60, 60);
+}
+
+void VideoPlayerWindow::updateSpinner()
+{
+    spinnerAngle += 45;
+
+    if (spinnerAngle >= 360)
+        spinnerAngle = 0;
+
+    loadingSpinner->setAngle(spinnerAngle);
+}
+
+void LoadingSpinner::setAngle(int value)
+{
+    angle = value;
+    update();
+}
+
+void LoadingSpinner::paintEvent(QPaintEvent*)
+{
+    QPainter painter(this);
+
+    painter.setRenderHint(QPainter::Antialiasing);
+
+    const QPointF center = rect().center();
+
+    painter.translate(center);
+    painter.rotate(angle);
+
+    const int radius = 20;
+    const int lineWidth = 4;
+
+    for (int i = 0; i < 8; ++i) {
+        painter.save();
+
+        painter.rotate(i * 45);
+
+        int alpha = 40 + (i * 25);
+
+        QPen pen;
+        pen.setWidth(lineWidth);
+        pen.setCapStyle(Qt::RoundCap);
+        pen.setColor(QColor(255, 255, 255, alpha));
+
+        painter.setPen(pen);
+
+        painter.drawLine(
+            0,
+            -radius + 5,
+            0,
+            -radius + 12
+        );
+
+        painter.restore();
+    }
 }

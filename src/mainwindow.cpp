@@ -63,9 +63,12 @@ bool MainWindow::eventFilter(QObject* watched, QEvent* event)
 
 void MainWindow::setupUi() {
     QWidget* centralWidget = new QWidget(this);
+    centralWidget->setStyleSheet("background-color: black;");
+
     QHBoxLayout* mainLayout = new QHBoxLayout(centralWidget);
     mainLayout->setContentsMargins(0, 0, 0, 0);
     mainLayout->setSpacing(0);
+    
 
     // =========================================================
     // 1. PANEL LATERAL
@@ -195,6 +198,7 @@ void MainWindow::setupUi() {
     connect(txtUrl, &QLineEdit::returnPressed, this, &MainWindow::openPlayer);
     connect(categorySearch, &QLineEdit::textChanged, this, &MainWindow::filterChannelItems);
     connect(treeMenu, &QTreeWidget::itemClicked, this, &MainWindow::onItemClicked);
+    connect(playerWindow, &VideoPlayerWindow::fullScreenToggled, this, &MainWindow::onFullScreenToggled);
     connect(
         categoryList,
         &QListView::clicked,
@@ -329,6 +333,41 @@ void MainWindow::toggleSidebar() {
     }
 
     sidebarWidget->setVisible(willBeVisible);
+}
+
+void MainWindow::onFullScreenToggled(bool isFullScreen)
+{
+    if (isFullScreen) {
+        // Guardar el estado previo de los paneles
+        sidebarWasVisibleBeforeFS = sidebarWidget->isVisible();
+        channelPanelWasOpenBeforeFS = (channelPanel->width() > 0);
+
+        // Ocultar la barra superior (Top Bar)
+        btnToggleMenu->hide();
+        txtUrl->hide();
+        btnOpenPlayer->hide();
+
+        sidebarWidget->hide();
+
+        channelAnimation->stop();
+        channelPanel->setMaximumWidth(0);
+
+    } else {
+        btnToggleMenu->show();
+        txtUrl->show();
+
+        btnOpenPlayer->show();
+        if (sidebarWasVisibleBeforeFS) {
+            sidebarWidget->show();
+        }
+
+        if (channelPanelWasOpenBeforeFS) {
+            channelAnimation->stop();
+            channelAnimation->setStartValue(channelPanel->width());
+            channelAnimation->setEndValue(280);
+            channelAnimation->start();
+        }
+    }
 }
 
 void MainWindow::populateChannelPanel()

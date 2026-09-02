@@ -1,3 +1,16 @@
+# [0.1.2] - 2026-09-1
+
+### Añadido
+- Boton de Pantalla Completa (Full Screen)
+- Spinner de Carga para el reproductor
+
+### Cambio
+- color oscuro al widget principal en ``mainwindow``
+- texto de boton stop a icono
+
+### Revertido
+- Icono antiguo de Menu
+
 ## [0.1.1] - 2026-08-25
 
 ### Añadido

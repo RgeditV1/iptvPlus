@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(iptvPlus VERSION 0.1.1 LANGUAGES CXX C)
+project(iptvPlus VERSION 0.1.2 LANGUAGES CXX C)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -109,7 +109,6 @@ set(CPACK_NSIS_EXTRA_INSTALL_COMMANDS "
     ExecWait '\\\"\\$INSTDIR\\\\_redist\\\\vcredist_v14.x64.exe\\\" /quiet /norestart'
     ExecWait '\\\"\\$INSTDIR\\\\_redist\\\\vcredist_v14.x86.exe\\\" /quiet /norestart'
     ExecWait '\\\"\\$INSTDIR\\\\_redist\\\\VulkanRT-Installer.exe\\\" /S'
-    RMDir /r '\\$INSTDIR\\\\_redist'
 ")
 
 include(CPack)
