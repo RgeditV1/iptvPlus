@@ -15,12 +15,16 @@ class UpdateNotifier : public QObject {
     Q_OBJECT
 
 public:
+
     explicit UpdateNotifier(QObject* parent = nullptr)
         : QObject(parent),
         networkManager(new QNetworkAccessManager(this))
     {
     }
 
+    /**
+     * @brief Inicia peticiones asíncronas para descargar las listas M3U remotas desde el repositorio de iptv-org.
+     */
     inline void fetchRemoteStreams() {
         qDebug() << "[UpdateNotifier] Obteniendo índice de archivos de iptv-org/iptv...";
 
@@ -43,7 +47,6 @@ public:
 
             QJsonArray filesArray = doc.array();
 
-            // Usamos punteros compartidos/estructuras para acumular las peticiones en curso
             auto pendingRequests = std::make_shared<int>(0);
             auto allChannels = std::make_shared<QList<M3UItem>>();
 
@@ -69,7 +72,6 @@ public:
 
                         (*pendingRequests)--;
 
-                        // Emitir la señal con todos los canales procesados una vez terminadas todas las descargas
                         if (*pendingRequests == 0) {
                             qDebug() << "[UpdateNotifier] Descarga remota finalizada. Total de canales cargados:" << allChannels->size();
                             emit remoteChannelsLoaded(*allChannels);
@@ -81,7 +83,10 @@ public:
     }
 
 signals:
-    // Emite la lista completa de canales procesados en RAM
+    /**
+     * @brief Señal emitida cuando finaliza la descarga y procesamiento de todos los canales remotos.
+     * @param channels Lista consolidada de canales cargados en memoria.
+     */
     void remoteChannelsLoaded(const QList<M3UItem>& channels);
 
 private:
