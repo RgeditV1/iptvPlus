@@ -1,9 +1,20 @@
+import sys
 import argparse
-from email import parser
 from pathlib import Path
 
+package_dir = Path(__file__).resolve().parent.parent
+if str(package_dir) not in sys.path:
+    sys.path.insert(0, str(package_dir))
+
 # __init__.py import
-from . import *
+from iptvplus import (
+    init_db,
+    save_media_item,
+    get_movie_details,
+    get_genres,
+    get_by_genre,
+    search_movies,
+)
 
 
 def main():
