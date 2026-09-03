@@ -67,6 +67,49 @@ install(FILES
 )
 
 # -----------------------------------------------------------------------------
+# Compilar Script de Python a Ejecutable (PyInstaller)
+# -----------------------------------------------------------------------------
+
+find_program(PYINSTALLER_EXECUTABLE pyinstaller)
+
+if(PYINSTALLER_EXECUTABLE)
+    set(PYTHON_SCRIPT "${CMAKE_CURRENT_SOURCE_DIR}/src/iptvplus/main.py")
+    set(PY_OUTPUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/py_build")
+    set(PY_EXE_NAME "scrap")
+    set(PY_TARGET_EXE "${PY_OUTPUT_DIR}/dist/${PY_EXE_NAME}.exe")
+
+    # Comando de compilación personalizada
+    add_custom_command(
+        OUTPUT "${PY_TARGET_EXE}"
+        COMMAND "${PYINSTALLER_EXECUTABLE}"
+                --noconfirm
+                --onefile
+                --name "${PY_EXE_NAME}"
+                --exclude-module "urllib3.contrib.emscripten"
+                --distpath "${PY_OUTPUT_DIR}/dist"
+                --workpath "${PY_OUTPUT_DIR}/build"
+                --specpath "${PY_OUTPUT_DIR}"
+                "${PYTHON_SCRIPT}"
+        DEPENDS "${PYTHON_SCRIPT}"
+        COMMENT "Compilando script de Python con PyInstaller..."
+        VERBATIM
+    )
+
+    # Crear objetivo dentro de MSBuild / Visual Studio
+    add_custom_target(build_python_helper ALL
+        DEPENDS "${PY_TARGET_EXE}"
+    )
+
+    add_dependencies(${PROJECT_NAME} build_python_helper)
+
+    # Regla de instalación para CPack / NSIS
+    install(FILES
+        "${PY_TARGET_EXE}"
+        DESTINATION .
+    )
+endif()
+
+# -----------------------------------------------------------------------------
 # Qt / windeployqt
 # -----------------------------------------------------------------------------
 

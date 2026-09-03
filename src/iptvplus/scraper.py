@@ -1,3 +1,4 @@
+import yt_dlp
 import base64
 from urllib.parse import urljoin
 import requests
@@ -46,6 +47,51 @@ GENRE_MAP = {
     "marvel": "universo-marvel",
 }
 
+
+def resolve_stream_url(embed_url: str, referer_url: str = None) -> str:
+    """
+    Intenta extraer la URL directa de reproducción (.m3u8 / .mp4).
+    Si yt-dlp no soporta el servidor, recurre a inspecionar el HTML.
+    """
+    ydl_opts = {
+        'format': 'best',
+        'quiet': True,
+        'no_warnings': True,
+    }
+    
+    if referer_url:
+        ydl_opts['http_headers'] = {'Referer': referer_url}
+
+    # 1. Intentar extracción con yt-dlp (Funciona para YouTube, Vimeo oficial, etc.)
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(embed_url, download=False)
+            if 'url' in info:
+                return info['url']
+    except Exception:
+        pass
+
+    # 2. Fallback para servidores iframe clon (ej. vimeos.net, voe clones)
+    try:
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/139.0",
+            "Referer": referer_url or "https://www.cinecalidad.am/"
+        }
+        resp = requests.get(embed_url, headers=headers, timeout=10)
+        
+        # Buscar en el HTML si hay un iframe anidado o un enlace m3u8
+        soup = BeautifulSoup(resp.text, "html.parser")
+        
+        # Si vimeos.net redirige internamente a otro iframe (como Voe o Fembed)
+        nested_iframe = soup.select_one("iframe[src]")
+        if nested_iframe and nested_iframe.get("src"):
+            return nested_iframe["src"]
+
+    except Exception as e:
+        print(f"Error resolviendo enlace: {e}")
+
+    # Retorna la URL embebida original si no se pudo desofuscar
+    return embed_url
 
 def _decode_url_if_needed(raw_url: str) -> str:
     """Intenta decodificar URLs si vienen en Base64 o limpia espacios."""

@@ -1,8 +1,27 @@
+import os
+import sys
 import sqlite3
 from pathlib import Path
 
-DB_PATH = Path(__file__).parent / "database.db"
 
+def get_app_data_dir(app_name: str = "iptvPlus") -> Path:
+    """
+    Retorna el directorio en %LOCALAPPDATA% para Windows,
+    o ~/.local/share para Linux/macOS. 
+    """
+    if sys.platform == "win32":
+        # C:\Users\<Usuario>\AppData\Local\iptvPlus
+        base_path = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local"))
+    else:
+        # Linux / macOS fallback (~/.local/share/iptvPlus)
+        base_path = Path.home() / ".local" / "share"
+
+    data_dir = base_path / app_name
+    data_dir.mkdir(parents=True, exist_ok=True)
+    return data_dir
+
+
+DB_PATH = get_app_data_dir("iptvPlus") / "database.db"
 
 def get_connection():
     conn = sqlite3.connect(DB_PATH)
