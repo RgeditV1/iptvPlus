@@ -8,6 +8,7 @@ __pycache__
 uv.lock
 src/iptvplus/*.txt
 src/iptvplus/*.json
+src/iptvplus/*.db
 
 # Prerequisites
 *.d
