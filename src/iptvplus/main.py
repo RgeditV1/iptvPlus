@@ -65,7 +65,6 @@ def main():
             print(f"Obteniendo detalles de {len(results)} películas...")
             
             for item in results:
-                # Extrae los detalles específicos de cada película
                 details = get_movie_details(item["url"])
 
                 save_media_item(
@@ -75,11 +74,17 @@ def main():
                     poster=details.get("poster") or item["poster"],
                     description=details.get("description"),
                     rating=details.get("rating"),
-                    genres=details.get("genres")
+                    genres=details.get("genres"),
+                    streams=details.get("streams"),
+                    trailer=details.get("trailer")
                 )
+                
                 print(f" - Procesada: {details.get('title') or item['title']}")
-
-            print(f"\nSe guardaron/actualizaron {len(results)} elementos completos en database.db")
+                if details.get("trailer"):
+                    print(f"    └ Tráiler: {details['trailer']}")
+                if details.get("streams"):
+                    for s in details["streams"]:
+                        print(f"    └ Reproductor ({s['server']}): {s['url']}")
 
     except Exception as error:
         print(f"Error procesando la solicitud: {error}")
