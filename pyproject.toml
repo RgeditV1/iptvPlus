@@ -1,6 +1,6 @@
 [project]
 name = "iptvplus"
-version = "0.1.2"
+version = "0.1.3"
 description = "Video Player for ```.m3u``` Files and Movies, Series is Coming Soon"
 readme = "README.md"
 authors = [

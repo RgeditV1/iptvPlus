@@ -1,3 +1,4 @@
+import re
 from urllib.parse import urljoin
 import requests
 from bs4 import BeautifulSoup
@@ -105,6 +106,57 @@ def _fetch_and_parse_movies(url: str, params: dict = None, limit: int = 10) -> l
 
     return results
 
+def get_movie_details(url: str) -> dict:
+    """Extrae la información detallada de una película desde su página individual."""
+    response = requests.get(url, timeout=15, headers=HEADERS)
+    response.raise_for_status()
+
+    soup = BeautifulSoup(response.text, "html.parser")
+    single_left = soup.select_one(".single_left")
+
+    if not single_left:
+        return {}
+
+    # Título principal
+    title_el = single_left.select_one("h1")
+    title = title_el.get_text(strip=True) if title_el else ""
+
+    # Poster en la vista detallada
+    poster_el = single_left.select_one("td img")
+    poster = ""
+    if poster_el:
+        poster_src = (
+            poster_el.get("data-src")
+            or poster_el.get("src")
+        )
+        if poster_src:
+            poster = urljoin(BASE_URL, poster_src)
+
+    # Sinopsis / Descripción
+    desc_el = single_left.select_one("td[style*='justify'] > p")
+    description = desc_el.get_text(strip=True) if desc_el else None
+
+    # Rating / Puntuación (TMDB)
+    rating = None
+    rating_b = single_left.select_one("span b")
+    if rating_b:
+        try:
+            rating = float(rating_b.get_text(strip=True))
+        except ValueError:
+            pass
+
+    genres = []
+    for g_anchor in single_left.select("span a[href*='/genero-de-la-pelicula/']"):
+        genres.append(g_anchor.get_text(strip=True))
+
+    return {
+        "title": title,
+        "url": url,
+        "poster": poster,
+        "description": description,
+        "rating": rating,
+        "genres": genres,
+    }
 
 def get_genres() -> list[dict]:
     """Retorna la lista de géneros disponibles basados en GENRE_MAP."""

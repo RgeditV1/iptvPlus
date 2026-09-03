@@ -1,5 +1,5 @@
 import argparse
-import json
+from email import parser
 from pathlib import Path
 
 # __init__.py import
@@ -7,6 +7,9 @@ from . import *
 
 
 def main():
+    
+    init_db()
+    
     parser = argparse.ArgumentParser(
         description="Buscador y explorador de películas de Cinecalidad"
     )
@@ -42,31 +45,44 @@ def main():
     )
 
     args = parser.parse_args()
-    path = Path(__file__).parent / "results.json"
 
     if not any([args.search, args.get_genres, args.genre]):
         parser.print_help()
         return
 
-    output = {}
-
     try:
         if args.get_genres:
             results = get_genres()
-        elif args.genre:
-            results = get_by_genre(args.genre, limit=args.limit)
-        elif args.search:
-            results = search_movies(args.search, limit=args.limit)
+            print(f"Géneros disponibles ({len(results)}):")
+            for g in results:
+                print(f" - {g['name']} ({g['slug']})")
+        else:
+            if args.genre:
+                results = get_by_genre(args.genre, limit=args.limit)
+            elif args.search:
+                results = search_movies(args.search, limit=args.limit)
 
-        output["results"] = results
+            print(f"Obteniendo detalles de {len(results)} películas...")
+            
+            for item in results:
+                # Extrae los detalles específicos de cada película
+                details = get_movie_details(item["url"])
+
+                save_media_item(
+                    title=details.get("title") or item["title"],
+                    media_type="movie",
+                    url=item["url"],
+                    poster=details.get("poster") or item["poster"],
+                    description=details.get("description"),
+                    rating=details.get("rating"),
+                    genres=details.get("genres")
+                )
+                print(f" - Procesada: {details.get('title') or item['title']}")
+
+            print(f"\nSe guardaron/actualizaron {len(results)} elementos completos en database.db")
 
     except Exception as error:
-        output = {"results": [], "error": str(error)}
-
-    # Escritura centralizada del JSON
-    with open(path, "w", encoding="utf-8") as file:
-        json.dump(output, file, ensure_ascii=False, indent=4)
-
+        print(f"Error procesando la solicitud: {error}")
 
 if __name__ == "__main__":
     main()

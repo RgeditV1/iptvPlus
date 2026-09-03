@@ -1,4 +1,4 @@
-# [0.1.2] - 2026-09-1
+## [0.1.2] - 2026-09-1
 
 ### Añadido
 - Boton de Pantalla Completa (Full Screen)
