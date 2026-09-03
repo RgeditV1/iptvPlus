@@ -25,6 +25,7 @@ def init_db():
                 description TEXT,
                 release_year INTEGER,
                 rating REAL,
+                trailer TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
         """)
@@ -44,6 +45,17 @@ def init_db():
                 PRIMARY KEY (media_id, genre_id),
                 FOREIGN KEY (media_id) REFERENCES media (id) ON DELETE CASCADE,
                 FOREIGN KEY (genre_id) REFERENCES genres (id) ON DELETE CASCADE
+            );
+        """)
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS streams (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                media_id INTEGER NOT NULL,
+                server TEXT NOT NULL,
+                url TEXT NOT NULL,
+                UNIQUE(media_id, url),
+                FOREIGN KEY (media_id) REFERENCES media (id) ON DELETE CASCADE
             );
         """)
 
@@ -69,22 +81,25 @@ def save_media_item(
     poster: str = None,
     description: str = None,
     rating: float = None,
-    genres: list = None
+    trailer: str = None,
+    genres: list = None,
+    streams: list[dict] = None
 ) -> int:
-    """Inserta o actualiza un elemento multimedia, su rating y sus géneros."""
+    """Inserta o actualiza un elemento multimedia, su rating, tráiler, géneros y reproductores."""
     with get_connection() as conn:
         cursor = conn.cursor()
         
         cursor.execute("""
-            INSERT INTO media (title, type, url, poster, description, rating)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO media (title, type, url, poster, description, rating, trailer)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(url) DO UPDATE SET
                 title=excluded.title,
                 poster=coalesce(excluded.poster, media.poster),
                 description=coalesce(excluded.description, media.description),
-                rating=coalesce(excluded.rating, media.rating)
+                rating=coalesce(excluded.rating, media.rating),
+                trailer=coalesce(excluded.trailer, media.trailer)
             RETURNING id;
-        """, (title, media_type, url, poster, description, rating))
+        """, (title, media_type, url, poster, description, rating, trailer))
         
         media_id = cursor.fetchone()["id"]
 
@@ -97,13 +112,25 @@ def save_media_item(
                 """, (genre_name, slug))
                 
                 cursor.execute("SELECT id FROM genres WHERE slug = ?", (slug,))
-                genre_id = cursor.fetchone()["id"]
+                genre_row = cursor.fetchone()
+                if genre_row:
+                    genre_id = genre_row["id"]
+                    cursor.execute("""
+                        INSERT INTO media_genres (media_id, genre_id)
+                        VALUES (?, ?)
+                        ON CONFLICT DO NOTHING;
+                    """, (media_id, genre_id))
 
-                cursor.execute("""
-                    INSERT INTO media_genres (media_id, genre_id)
-                    VALUES (?, ?)
-                    ON CONFLICT DO NOTHING;
-                """, (media_id, genre_id))
+        if streams:
+            for stream in streams:
+                server = stream.get("server", "Unknown")
+                stream_url = stream.get("url")
+                if stream_url:
+                    cursor.execute("""
+                        INSERT INTO streams (media_id, server, url)
+                        VALUES (?, ?, ?)
+                        ON CONFLICT(media_id, url) DO NOTHING;
+                    """, (media_id, server, stream_url))
 
         conn.commit()
         return media_id
