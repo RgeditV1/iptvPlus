@@ -53,6 +53,8 @@ public:
      * @param row Índice del canal a reproducir.
      */
     void playChannelAt(int row);
+     
+    void setNavigationButtonsVisible(bool visible);
 
 protected:
     /**

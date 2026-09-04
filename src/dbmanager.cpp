@@ -84,6 +84,61 @@ QList<QVariantMap> DbManager::getMovies(int limit) {
     return movies;
 }
 
+QVariantMap DbManager::getMovieDetails(int mediaId) {
+    QVariantMap result;
+    if (!m_db.isOpen()) return result;
+
+    // Obtener metadatos completos de la película
+    QSqlQuery queryMovie;
+    queryMovie.prepare("SELECT id, title, poster, description, rating, trailer FROM media WHERE id = :id LIMIT 1;");
+    queryMovie.bindValue(":id", mediaId);
+
+    if (queryMovie.exec() && queryMovie.next()) {
+        result["id"] = queryMovie.value("id").toInt();
+        result["title"] = queryMovie.value("title").toString();
+        result["poster"] = queryMovie.value("poster").toString();
+        result["description"] = queryMovie.value("description").toString();
+        result["rating"] = queryMovie.value("rating").toDouble();
+        result["trailer"] = queryMovie.value("trailer").toString();
+    } else {
+        return result;
+    }
+
+    // Obtener géneros asociados
+    QStringList genresList;
+    QSqlQuery queryGenres;
+    queryGenres.prepare(
+        "SELECT g.name FROM genres g "
+        "JOIN media_genres mg ON g.id = mg.genre_id "
+        "WHERE mg.media_id = :id;"
+    );
+    queryGenres.bindValue(":id", mediaId);
+    if (queryGenres.exec()) {
+        while (queryGenres.next()) {
+            genresList.append(queryGenres.value("name").toString());
+        }
+    }
+    result["genres"] = genresList.join(", ");
+
+    // Obtener servidores de reproducción
+    QList<QVariantMap> servers;
+    QSqlQuery queryStreams;
+    queryStreams.prepare("SELECT server, url FROM streams WHERE media_id = :id;");
+    queryStreams.bindValue(":id", mediaId);
+
+    if (queryStreams.exec()) {
+        while (queryStreams.next()) {
+            QVariantMap stream;
+            stream["server"] = queryStreams.value("server").toString();
+            stream["url"] = queryStreams.value("url").toString();
+            servers.append(stream);
+        }
+    }
+    result["servers"] = QVariant::fromValue(servers);
+
+    return result;
+}
+
 QVariantMap DbManager::getMovieDetailsWithStream(int mediaId) {
     QVariantMap result;
     if (!m_db.isOpen()) return result;

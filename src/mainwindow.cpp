@@ -238,6 +238,10 @@ void MainWindow::setupUi() {
     moviesWidget = new MoviesWidget(this);
     stackedWidget->addWidget(moviesWidget);
 
+    // Ficha Técnica / Detalle de Película (Índice 2)
+    movieDetailsWidget = new MovieDetailsWidget(this);
+    stackedWidget->addWidget(movieDetailsWidget);
+
     rightLayout->addLayout(topBarLayout, 0);
     rightLayout->addWidget(stackedWidget, 1);
 
@@ -263,8 +267,11 @@ void MainWindow::setupUi() {
         if (url.isEmpty()) return;
         
         // Al hacer clic en un canal, nos aseguramos de mostrar el reproductor
-        txtUrl->setVisible(true); // por si no se muestra
+        txtUrl->setVisible(true);
         btnOpenPlayer->setVisible(true);
+        searchMoviesEdit->hide();
+        genreComboBox->hide();
+        
         stackedWidget->setCurrentWidget(playerWindow);
         
         txtUrl->setText(url);
@@ -280,17 +287,35 @@ void MainWindow::setupUi() {
         txtUrl->setText(index.data(Qt::UserRole).toString());
     });
 
-    connect(moviesWidget, &MoviesWidget::movieSelected, this, [this](const QString& streamUrl) {
+    // --- FLUJO FICHA TÉCNICA Y PELÍCULAS ---
+
+    //Al hacer clic en una tarjeta del catálogo, se muestra la ficha técnica
+    connect(moviesWidget, &MoviesWidget::movieSelected, this, [this](int mediaId) {
+        movieDetailsWidget->loadMovie(mediaId);
+        stackedWidget->setCurrentWidget(movieDetailsWidget);
+    });
+
+    //Al hacer clic en "Volver" desde la ficha técnica
+    connect(movieDetailsWidget, &MovieDetailsWidget::backRequested, this, [this]() {
+        stackedWidget->setCurrentWidget(moviesWidget);
+    });
+
+    //Al seleccionar un servidor de reproducción en la ficha técnica
+    connect(movieDetailsWidget, &MovieDetailsWidget::playStreamRequested, this, [this](const QString& streamUrl) {
         // Configurar la URL en la barra superior
         txtUrl->setText(streamUrl);
 
-        // Ocultar controles de películas y mostrar controles del reproductor
+        // Ocultar controles de búsqueda de películas y asegurar la visibilidad del reproductor
         searchMoviesEdit->hide();
         genreComboBox->hide();
         txtUrl->show();
         btnOpenPlayer->show();
 
-        // Cambiar vista al reproductor de video y reproducir el stream directo[cite: 5]
+        // Ocultar botones de navegación de lista IPTV y desvincular el modelo
+        playerWindow->setModel(nullptr);
+        playerWindow->setNavigationButtonsVisible(false);
+
+        // Cambiar vista al reproductor de video e iniciar el stream
         stackedWidget->setCurrentWidget(playerWindow);
         playerWindow->playMedia(streamUrl);
     });
@@ -383,6 +408,10 @@ void MainWindow::onItemClicked(QTreeWidgetItem* item, int column)
         if (playerWindow) {
             openPlayer();
         }
+        // Restablecer el modelo M3U y mostrar botones de navegación
+        playerWindow->setModel(channelModel);
+        playerWindow->setNavigationButtonsVisible(true);
+
         // Ocultar controles de Películas
         searchMoviesEdit->hide();
         genreComboBox->hide();
@@ -414,7 +443,7 @@ void MainWindow::onItemClicked(QTreeWidgetItem* item, int column)
             toggleChannelPanel();
         }
 
-        // INVOCACIÓN AGREGADA: Cargar catálogo inicial de películas
+        // Cargar catálogo inicial de películas
         moviesWidget->loadMovies(searchMoviesEdit->text().trimmed(), genreComboBox->currentText());
         return;
     }

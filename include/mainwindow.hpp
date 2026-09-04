@@ -105,6 +105,8 @@ private:
 
     UpdateNotifier* updateNotifier;
 
+    MovieDetailsWidget* movieDetailsWidget;
+
     /**
      * @brief Configura la estructura visual y propiedades del panel lateral de canales.
      */

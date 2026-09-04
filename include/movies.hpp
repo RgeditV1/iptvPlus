@@ -1,5 +1,7 @@
 #pragma once
 
+#include "moviedetailswidget.hpp"
+
 #include <QWidget>
 #include <QScrollArea>
 #include <QGridLayout>
@@ -20,7 +22,7 @@ public:
     void loadMovies(const QString& searchQuery = "", const QString& genre = "", int limit = 20);
 
 signals:
-    void movieSelected(const QString& streamUrl);
+    void movieSelected(int mediaId);
 
 protected:
     void resizeEvent(QResizeEvent* event) override;
@@ -38,9 +40,10 @@ private:
 
     QProcess* scraperProcess;
     QNetworkAccessManager* networkManager;
-
+    MovieDetailsWidget* movieDetailsWidget;
+    
     int columnsCount = 4; // Por defecto 4 columnas
-
+    
     void setupUi();
     void addMovieCard(int mediaId, const QString& title, const QString& posterUrl, int index);
     void rearrangeGrid();
