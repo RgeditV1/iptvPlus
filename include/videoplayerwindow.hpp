@@ -54,6 +54,14 @@ public:
      */
     void playChannelAt(int row);
 
+        /**
+     * @brief Alterna entre el modo en ventana y pantalla completa.
+     */
+    void toggleFullScreen();
+     
+    void setNavigationButtonsVisible(bool visible);
+    void setBackToDetailsVisible(bool visible);
+
 protected:
     /**
      * @brief Evento para detectar movimiento de cursor u ocultamiento de controles sobre la ventana.
@@ -101,11 +109,6 @@ private slots:
      */
     void playNextChannel();
 
-    /**
-     * @brief Alterna entre el modo en ventana y pantalla completa.
-     */
-    void toggleFullScreen();
-
 signals:
     /**
      * @brief Señal emitida cuando cambia el canal en reproducción actual.
@@ -118,6 +121,8 @@ signals:
      * @param isFullScreen true si está en pantalla completa, false en caso contrario.
      */
     void fullScreenToggled(bool isFullScreen);
+
+    void backToDetailsRequested();
 
 private:
     mpv_handle* mpv;
@@ -140,6 +145,8 @@ private:
     QWidget* volumeContainer;
     QToolButton* btnVolume;
     QSlider* sliderVolume;
+
+    QPushButton* btnBackToDetails;
 
     bool isPaused;
     bool isMuted;

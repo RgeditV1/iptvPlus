@@ -132,6 +132,21 @@ void VideoPlayerWindow::setupUi()
         "}"
     );
 
+    btnBackToDetails = new QPushButton("← Atras", controlsContainer);
+    btnBackToDetails->setCursor(Qt::PointingHandCursor);
+    btnBackToDetails->setStyleSheet(
+        "QPushButton {"
+        "    background-color: rgba(43, 43, 54, 200);"
+        "    border: 1px solid #3a3a4c;"
+        "    border-radius: 4px;"
+        "    padding: 4px 10px;"
+        "    color: white;"
+        "    font-weight: bold;"
+        "}"
+        "QPushButton:hover { background-color: rgba(58, 58, 76, 255); }"
+    );
+    btnBackToDetails->hide();
+
     QHBoxLayout* controlsLayout = new QHBoxLayout(controlsContainer);
     controlsLayout->setContentsMargins(8, 6, 8, 6);
     controlsLayout->setSpacing(5);
@@ -189,6 +204,7 @@ void VideoPlayerWindow::setupUi()
     // =========================================================
     // AGREGAR AL LAYOUT DE CONTROLES
     // =========================================================
+    controlsLayout->addWidget(btnBackToDetails);
     controlsLayout->addStretch(1);
 
     controlsLayout->addWidget(btnPrevious);
@@ -234,6 +250,7 @@ void VideoPlayerWindow::setupUi()
     connect(sliderVolume, &QSlider::valueChanged, this, &VideoPlayerWindow::setVolume);
     connect(btnVolume, &QToolButton::clicked, this, &VideoPlayerWindow::togleMute);
     connect(btnStop, &QPushButton::clicked, this, &VideoPlayerWindow::stopMedia);
+    connect(btnBackToDetails, &QPushButton::clicked, this, &VideoPlayerWindow::backToDetailsRequested);
 
     updateVolumeIcon();
 }
@@ -522,6 +539,22 @@ bool VideoPlayerWindow::eventFilter(QObject* watched, QEvent* event)
     }
 
     return QWidget::eventFilter(watched, event);
+}
+
+void VideoPlayerWindow::setNavigationButtonsVisible(bool visible)
+{
+    if (btnPrevious) {
+        btnPrevious->setVisible(visible);
+    }
+    if (btnNext) {
+        btnNext->setVisible(visible);
+    }
+}
+
+void VideoPlayerWindow::setBackToDetailsVisible(bool visible) {
+    if (btnBackToDetails) {
+        btnBackToDetails->setVisible(visible);
+    }
 }
 
 void VideoPlayerWindow::playMedia(const QString& url)

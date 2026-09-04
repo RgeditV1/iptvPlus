@@ -3,6 +3,7 @@
 #include "update.hpp"
 #include "m3uparser.hpp"
 #include "channellistmodel.hpp"
+#include "movies.hpp"
 
 #include <QMainWindow>
 #include <QTreeWidget>
@@ -13,6 +14,9 @@
 #include <QPropertyAnimation>
 #include <QListWidget>
 #include <QRandomGenerator>
+#include <QStackedWidget>
+#include <QComboBox>
+#include <QResizeEvent>
 
 class VideoPlayerWindow;
 class QLineEdit;
@@ -36,6 +40,8 @@ protected:
      * @return true si el evento fue gestionado completamente; false de lo contrario.
      */
     bool eventFilter(QObject* watched, QEvent* event) override;
+
+    void resizeEvent(QResizeEvent* event) override;
 
 private slots:
     /**
@@ -74,12 +80,17 @@ private slots:
 
 private:
     QLineEdit* txtUrl;
+    QLineEdit* searchMoviesEdit;
+    QComboBox* genreComboBox;
     QPushButton* btnOpenPlayer;
     QPushButton* btnToggleMenu;
 
     QWidget* sidebarWidget;
     QTreeWidget* treeMenu;
     QTreeWidgetItem* itemCanales;
+    QTreeWidgetItem* itemPeliculas;
+    QStackedWidget* stackedWidget;
+    
 
     QFrame* channelPanel;
     QLineEdit* categorySearch;
@@ -90,10 +101,16 @@ private:
     QPropertyAnimation* channelAnimation;
 
     VideoPlayerWindow* playerWindow;
+    MoviesWidget* moviesWidget;
+
     M3UParser m3uParser;
     QList<M3UItem> currentChannels;
 
     UpdateNotifier* updateNotifier;
+
+    MovieDetailsWidget* movieDetailsWidget;
+
+    void updateMenuButtonPosition();
 
     /**
      * @brief Configura la estructura visual y propiedades del panel lateral de canales.

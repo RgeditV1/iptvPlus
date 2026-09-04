@@ -1,4 +1,12 @@
-# [0.1.2] - 2026-09-1
+## [0.1.3] - 2026-09-3
+
+### Añadido
+- Icono de Aplicacion
+
+### Cambio
+- Titulo de la ventana principal
+
+## [0.1.2] - 2026-09-1
 
 ### Añadido
 - Boton de Pantalla Completa (Full Screen)
