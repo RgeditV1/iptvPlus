@@ -3,6 +3,7 @@
 #include "update.hpp"
 #include "m3uparser.hpp"
 #include "channellistmodel.hpp"
+#include "movies.hpp"
 
 #include <QMainWindow>
 #include <QTreeWidget>
@@ -13,6 +14,8 @@
 #include <QPropertyAnimation>
 #include <QListWidget>
 #include <QRandomGenerator>
+#include <QStackedWidget>
+#include <QComboBox>
 
 class VideoPlayerWindow;
 class QLineEdit;
@@ -74,12 +77,17 @@ private slots:
 
 private:
     QLineEdit* txtUrl;
+    QLineEdit* searchMoviesEdit;
+    QComboBox* genreComboBox;
     QPushButton* btnOpenPlayer;
     QPushButton* btnToggleMenu;
 
     QWidget* sidebarWidget;
     QTreeWidget* treeMenu;
     QTreeWidgetItem* itemCanales;
+    QTreeWidgetItem* itemPeliculas;
+    QStackedWidget* stackedWidget;
+    
 
     QFrame* channelPanel;
     QLineEdit* categorySearch;
@@ -90,6 +98,8 @@ private:
     QPropertyAnimation* channelAnimation;
 
     VideoPlayerWindow* playerWindow;
+    MoviesWidget* moviesWidget;
+
     M3UParser m3uParser;
     QList<M3UItem> currentChannels;
 

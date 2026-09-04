@@ -1,6 +1,11 @@
 import sys
+import io
 import argparse
 from pathlib import Path
+
+# Evita que Windows falle al imprimir caracteres
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
 
 package_dir = Path(__file__).resolve().parent.parent
 if str(package_dir) not in sys.path:

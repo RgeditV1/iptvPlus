@@ -75,10 +75,9 @@ void MainWindow::setupUi() {
     QHBoxLayout* mainLayout = new QHBoxLayout(centralWidget);
     mainLayout->setContentsMargins(0, 0, 0, 0);
     mainLayout->setSpacing(0);
-    
 
     // =========================================================
-    // 1. PANEL LATERAL
+    // 1. PANEL LATERAL (Sidebar)
     // =========================================================
     sidebarWidget = new QWidget(this);
     sidebarWidget->setFixedWidth(160);
@@ -96,12 +95,11 @@ void MainWindow::setupUi() {
         "    padding: 8px 6px;"
         "    border: none;"
         "    outline: none;"
-        "    border-bottom: 1px solid #282830;" // Borde entre categorías
+        "    border-bottom: 1px solid #282830;"
         "}"
         "QTreeWidget::item:hover {"
         "    background-color: #2a2a35;"
         "}"
-        /* Mantiene el azul azul vibrante activo y visible cuando el usuario hace clic en otro lado */
         "QTreeWidget::item:selected, QTreeWidget::item:selected:!active {"
         "    background-color: #007acc;"
         "    color: white;"
@@ -112,7 +110,6 @@ void MainWindow::setupUi() {
     sidebarLayout->setContentsMargins(8, 8, 8, 8);
     sidebarLayout->setSpacing(6);
 
-    // Árbol para categorías y submenús
     treeMenu = new QTreeWidget(sidebarWidget);
     treeMenu->setColumnCount(2);
     treeMenu->setHeaderHidden(true);
@@ -129,16 +126,19 @@ void MainWindow::setupUi() {
     itemCanales->setIcon(1, QIcon(":/resources/icons/arrow-right.svg"));
     itemCanales->setTextAlignment(1, Qt::AlignCenter);
 
+    // --- Categoría: Películas ---
+    itemPeliculas = new QTreeWidgetItem(treeMenu);
+    itemPeliculas->setText(0, "Películas");
+    itemPeliculas->setIcon(0, QIcon(":/resources/icons/film.svg"));
+
     sidebarLayout->addWidget(treeMenu);
     treeMenu->setCurrentItem(itemCanales); // por defecto
 
     sidebarWidget->hide();
 
-    QWidget* rightWidget = new QWidget(this);
-    QVBoxLayout* rightLayout = new QVBoxLayout(rightWidget);
-    rightLayout->setContentsMargins(0, 0, 0, 0);
-    rightLayout->setSpacing(0);
-
+    // =========================================================
+    // 2. PANEL DE LISTA DE CANALES
+    // =========================================================
     channelPanel = new QFrame(centralWidget);
     channelPanel->setMinimumWidth(0);
     channelPanel->setMaximumWidth(0);
@@ -146,6 +146,14 @@ void MainWindow::setupUi() {
     channelPanel->setFrameShape(QFrame::NoFrame);
 
     setupChannelPanel();
+
+    // =========================================================
+    // 3. VISTA DERECHA (BARRA SUPERIOR + STACKED WIDGET)
+    // =========================================================
+    QWidget* rightWidget = new QWidget(this);
+    QVBoxLayout* rightLayout = new QVBoxLayout(rightWidget);
+    rightLayout->setContentsMargins(0, 0, 0, 0);
+    rightLayout->setSpacing(0);
 
     // --- BARRA SUPERIOR (TOP BAR) ---
     QHBoxLayout* topBarLayout = new QHBoxLayout();
@@ -174,22 +182,64 @@ void MainWindow::setupUi() {
     );
 
     txtUrl = new QLineEdit(this);
-    txtUrl->setPlaceholderText("Ingresa la URL del stream .m3u8 aquí...");
+    txtUrl->setPlaceholderText("Ingresa la URL..");
 
     btnOpenPlayer = new QPushButton("Reproducir Canal", this);
     btnOpenPlayer->setCursor(Qt::PointingHandCursor);
 
+    searchMoviesEdit = new QLineEdit(this);
+    searchMoviesEdit->setPlaceholderText("Buscar películas...");
+    searchMoviesEdit->hide(); // Oculto por defecto
+
+    genreComboBox = new QComboBox(this);
+    genreComboBox->addItem("Todos los géneros");
+    genreComboBox->setMinimumWidth(160);
+    genreComboBox->hide(); // Oculto por defecto
+
+    QString topBarControlsStyle = 
+        "QLineEdit {"
+        "    background-color: #2b2b36;"
+        "    border: 1px solid #3a3a4c;"
+        "    border-radius: 4px;"
+        "    padding: 5px;"
+        "    color: white;"
+        "}"
+        "QComboBox {"
+        "    background-color: #2b2b36;"
+        "    border: 1px solid #3a3a4c;"
+        "    border-radius: 4px;"
+        "    padding: 5px;"
+        "    color: white;"
+        "}"
+        "QComboBox QAbstractItemView {"
+        "    background-color: #1e1e24;"
+        "    color: white;"
+        "    selection-background-color: #007acc;"
+        "}";
+
+    searchMoviesEdit->setStyleSheet(topBarControlsStyle);
+    genreComboBox->setStyleSheet(topBarControlsStyle);
+
     topBarLayout->addWidget(btnToggleMenu);
-    topBarLayout->addWidget(txtUrl);
-    topBarLayout->addWidget(btnOpenPlayer);
+    topBarLayout->addWidget(txtUrl, 1);
+    topBarLayout->addWidget(btnOpenPlayer, 0);
+    topBarLayout->addWidget(searchMoviesEdit, 1);
+    topBarLayout->addWidget(genreComboBox, 0);
 
-    // --- REPRODUCTOR ---
+    // --- STACKED WIDGET (Pestañas) ---
+    stackedWidget = new QStackedWidget(this);
+
+    // Reproductor (Índice 0)
     playerWindow = new VideoPlayerWindow(this);
-
     playerWindow->setModel(channelModel);
+    stackedWidget->addWidget(playerWindow);
+
+    // Módulo de Películas (Índice 1)
+    moviesWidget = new MoviesWidget(this);
+    stackedWidget->addWidget(moviesWidget);
 
     rightLayout->addLayout(topBarLayout, 0);
-    rightLayout->addWidget(playerWindow, 1);
+    rightLayout->addWidget(stackedWidget, 1);
 
     mainLayout->addWidget(sidebarWidget, 0);
     mainLayout->addWidget(channelPanel, 0);
@@ -198,7 +248,7 @@ void MainWindow::setupUi() {
     setCentralWidget(centralWidget);
 
     // =========================================================
-    // 3. CONEXIONES
+    // CONEXIONES
     // =========================================================
     connect(btnToggleMenu, &QPushButton::clicked, this, &MainWindow::toggleSidebar);
     connect(btnOpenPlayer, &QPushButton::clicked, this, &MainWindow::openPlayer);
@@ -206,47 +256,57 @@ void MainWindow::setupUi() {
     connect(categorySearch, &QLineEdit::textChanged, this, &MainWindow::filterChannelItems);
     connect(treeMenu, &QTreeWidget::itemClicked, this, &MainWindow::onItemClicked);
     connect(playerWindow, &VideoPlayerWindow::fullScreenToggled, this, &MainWindow::onFullScreenToggled);
-    connect(
-        categoryList,
-        &QListView::clicked,
-        this,
-        [this](const QModelIndex& index) {
+    
+    connect(categoryList, &QListView::clicked, this, [this](const QModelIndex& index) {
+        if (!index.isValid()) return;
+        const QString url = index.data(Qt::UserRole).toString();
+        if (url.isEmpty()) return;
+        
+        // Al hacer clic en un canal, nos aseguramos de mostrar el reproductor
+        txtUrl->setVisible(true); // por si no se muestra
+        btnOpenPlayer->setVisible(true);
+        stackedWidget->setCurrentWidget(playerWindow);
+        
+        txtUrl->setText(url);
+        playerWindow->playChannelAt(index.row());
+    });
 
-            if (!index.isValid())
-                return;
+    connect(playerWindow, &VideoPlayerWindow::channelChanged, this, [this](int row) {
+        if (!categoryList->model()) return;
+        QModelIndex index = categoryList->model()->index(row, 0);
+        if (!index.isValid()) return;
+        categoryList->setCurrentIndex(index);
+        categoryList->scrollTo(index, QAbstractItemView::PositionAtCenter);
+        txtUrl->setText(index.data(Qt::UserRole).toString());
+    });
 
-            const QString url = index.data(Qt::UserRole).toString();
+    connect(moviesWidget, &MoviesWidget::movieSelected, this, [this](const QString& streamUrl) {
+        // Configurar la URL en la barra superior
+        txtUrl->setText(streamUrl);
 
-            if (url.isEmpty())
-                return;
+        // Ocultar controles de películas y mostrar controles del reproductor
+        searchMoviesEdit->hide();
+        genreComboBox->hide();
+        txtUrl->show();
+        btnOpenPlayer->show();
 
-            txtUrl->setText(url);
-            playerWindow->playChannelAt(index.row());
-        }
-    );
-    connect( // Sincronizacion con la lista
-        playerWindow,
-        &VideoPlayerWindow::channelChanged,
-        this,
-        [this](int row) {
+        // Cambiar vista al reproductor de video y reproducir el stream directo[cite: 5]
+        stackedWidget->setCurrentWidget(playerWindow);
+        playerWindow->playMedia(streamUrl);
+    });
 
-            if (!categoryList->model())
-                return;
+    // Activar búsqueda al presionar ENTER en el campo de texto de películas
+    connect(searchMoviesEdit, &QLineEdit::returnPressed, this, [this]() {
+        QString query = searchMoviesEdit->text().trimmed();
+        QString genre = genreComboBox->currentText();
+        moviesWidget->loadMovies(query, genre);
+    });
 
-            QModelIndex index = categoryList->model()->index(row, 0);
-
-            if (!index.isValid())
-                return;
-
-            categoryList->setCurrentIndex(index);
-            categoryList->scrollTo(
-                index,
-                QAbstractItemView::PositionAtCenter
-            );
-			txtUrl->setText(index.data(Qt::UserRole).toString());
-        }
-    );
-
+    // Activar filtro al cambiar la selección en el combo box de géneros
+    connect(genreComboBox, &QComboBox::currentTextChanged, this, [this](const QString& genre) {
+        QString query = searchMoviesEdit->text().trimmed();
+        moviesWidget->loadMovies(query, genre);
+    });
 }
 
 void MainWindow::toggleChannelPanel()
@@ -320,13 +380,54 @@ void MainWindow::onItemClicked(QTreeWidgetItem* item, int column)
         return;
 
     if (item == itemCanales) {
+        if (playerWindow) {
+            openPlayer();
+        }
+        // Ocultar controles de Películas
+        searchMoviesEdit->hide();
+        genreComboBox->hide();
+
+        // Mostrar controles de Canales
+        txtUrl->show();
+        btnOpenPlayer->show();
+
+        // Cambiar vista al reproductor
+        stackedWidget->setCurrentWidget(playerWindow);
         toggleChannelPanel();
+        return;
+    }
+
+    if (item == itemPeliculas) {
+        if (playerWindow) {
+            playerWindow->stopMedia();
+        }
+
+        txtUrl->hide();
+        btnOpenPlayer->hide();
+
+        searchMoviesEdit->show();
+        genreComboBox->show();
+
+        stackedWidget->setCurrentWidget(moviesWidget);
+
+        if (channelPanel->width() > 0) {
+            toggleChannelPanel();
+        }
+
+        // INVOCACIÓN AGREGADA: Cargar catálogo inicial de películas
+        moviesWidget->loadMovies(searchMoviesEdit->text().trimmed(), genreComboBox->currentText());
         return;
     }
 
     QString url = item->data(0, Qt::UserRole).toString();
 
     if (!url.isEmpty()) {
+        searchMoviesEdit->hide();
+        genreComboBox->hide();
+        txtUrl->show();
+        btnOpenPlayer->show();
+
+        stackedWidget->setCurrentWidget(playerWindow);
         txtUrl->setText(url);
         openPlayer();
     }
