@@ -8,6 +8,8 @@
 #include <QScrollArea>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
+#include <QPixmap>
+#include <QResizeEvent>
 
 class MovieDetailsWidget : public QWidget {
     Q_OBJECT
@@ -21,6 +23,9 @@ public:
 signals:
     void backRequested();
     void playStreamRequested(const QString& streamUrl);
+
+protected:
+    void resizeEvent(QResizeEvent* event) override;
 
 private:
     QLabel* posterLabel;
@@ -37,6 +42,8 @@ private:
 
     QNetworkAccessManager* networkManager;
     QString currentTrailerUrl;
+    QPixmap currentPosterPixmap;
 
     void setupUi();
+    void updatePosterPixmap();
 };

@@ -1,7 +1,6 @@
 #include "moviedetailswidget.hpp"
 #include "dbmanager.hpp"
 
-#include <QPixmap>
 #include <QDesktopServices>
 #include <QUrl>
 #include <QDebug>
@@ -52,9 +51,11 @@ void MovieDetailsWidget::setupUi() {
     mainLayout->setContentsMargins(20, 20, 20, 20);
     mainLayout->setSpacing(16);
 
-    // Barra superior de navegación
     QHBoxLayout* topNavLayout = new QHBoxLayout();
-    btnBack = new QPushButton("← Volver a películas", this);
+    topNavLayout->setContentsMargins(36, 0, 0, 0);
+    topNavLayout->setSpacing(10);
+
+    btnBack = new QPushButton("← Atras", this);
     btnBack->setObjectName("btnBack");
     btnBack->setCursor(Qt::PointingHandCursor);
     connect(btnBack, &QPushButton::clicked, this, &MovieDetailsWidget::backRequested);
@@ -62,7 +63,7 @@ void MovieDetailsWidget::setupUi() {
     btnTrailer = new QPushButton("▶ Ver Tráiler", this);
     btnTrailer->setObjectName("btnTrailer");
     btnTrailer->setCursor(Qt::PointingHandCursor);
-    btnTrailer->hide(); // Se muestra solo si existe tráiler
+    btnTrailer->hide();
     connect(btnTrailer, &QPushButton::clicked, this, [this]() {
         if (!currentTrailerUrl.isEmpty()) {
             QDesktopServices::openUrl(QUrl(currentTrailerUrl));
@@ -76,7 +77,7 @@ void MovieDetailsWidget::setupUi() {
 
     mainLayout->addLayout(topNavLayout);
 
-    // Contenedor horizontal de la ficha (Poster + Información)
+    // Contenedor horizontal de la ficha
     QHBoxLayout* detailsLayout = new QHBoxLayout();
     detailsLayout->setSpacing(24);
 
@@ -101,7 +102,7 @@ void MovieDetailsWidget::setupUi() {
     genresLabel->setStyleSheet("font-size: 13px; color: #888888;");
     genresLabel->setWordWrap(true);
 
-    // Sinopsis dentro de un ScrollArea
+    // Sinopsis
     QScrollArea* descScroll = new QScrollArea(this);
     descScroll->setWidgetResizable(true);
     descScroll->setMaximumHeight(120);
@@ -115,7 +116,7 @@ void MovieDetailsWidget::setupUi() {
     QLabel* serverHeaderLabel = new QLabel("Servidores disponibles:", this);
     serverHeaderLabel->setStyleSheet("font-size: 14px; color: #ffffff; font-weight: bold; margin-top: 10px;");
 
-    // Contenedor para botones de servidores
+    // Servidores
     serversContainer = new QWidget(this);
     serversLayout = new QHBoxLayout(serversContainer);
     serversLayout->setContentsMargins(0, 0, 0, 0);
@@ -130,19 +131,32 @@ void MovieDetailsWidget::setupUi() {
     infoLayout->addWidget(serversContainer);
     infoLayout->addStretch(1);
 
-    detailsLayout->addWidget(posterLabel);
+    detailsLayout->addWidget(posterLabel, 0, Qt::AlignTop | Qt::AlignLeft);
     detailsLayout->addLayout(infoLayout, 1);
 
     mainLayout->addLayout(detailsLayout, 1);
 }
 
+void MovieDetailsWidget::updatePosterPixmap() {
+    if (!currentPosterPixmap.isNull() && posterLabel) {
+        posterLabel->setPixmap(currentPosterPixmap.scaled(
+            posterLabel->size(),
+            Qt::KeepAspectRatio,
+            Qt::SmoothTransformation
+        ));
+    }
+}
+
+void MovieDetailsWidget::resizeEvent(QResizeEvent* event) {
+    QWidget::resizeEvent(event);
+    updatePosterPixmap();
+}
+
 void MovieDetailsWidget::loadMovie(int mediaId) {
     QVariantMap movie = DbManager::instance().getMovieDetails(mediaId);
 
-    // Título
     titleLabel->setText(movie["title"].toString());
 
-    // Rating (Puntuación)
     double rating = movie["rating"].toDouble();
     if (rating > 0) {
         ratingLabel->setText(QString("★ %1 / 10").arg(rating, 0, 'f', 1));
@@ -151,7 +165,6 @@ void MovieDetailsWidget::loadMovie(int mediaId) {
         ratingLabel->hide();
     }
 
-    // Géneros
     QString genres = movie["genres"].toString();
     if (!genres.isEmpty()) {
         genresLabel->setText("Géneros: " + genres);
@@ -160,7 +173,6 @@ void MovieDetailsWidget::loadMovie(int mediaId) {
         genresLabel->hide();
     }
 
-    // Sinopsis
     QString desc = movie["description"].toString();
     if (!desc.isEmpty()) {
         descriptionLabel->setText(desc);
@@ -168,12 +180,13 @@ void MovieDetailsWidget::loadMovie(int mediaId) {
         descriptionLabel->setText("Sin descripción disponible.");
     }
 
-    // Tráiler
     currentTrailerUrl = movie["trailer"].toString();
     btnTrailer->setVisible(!currentTrailerUrl.isEmpty());
 
-    // Cargar Poster
+    posterLabel->clear();
     posterLabel->setText("Cargando...");
+    currentPosterPixmap = QPixmap();
+
     QString posterUrl = movie["poster"].toString();
     if (!posterUrl.isEmpty()) {
         QNetworkRequest request((QUrl(posterUrl)));
@@ -181,14 +194,8 @@ void MovieDetailsWidget::loadMovie(int mediaId) {
 
         connect(reply, &QNetworkReply::finished, this, [this, reply]() {
             if (reply->error() == QNetworkReply::NoError) {
-                QPixmap pixmap;
-                pixmap.loadFromData(reply->readAll());
-                if (!pixmap.isNull()) {
-                    posterLabel->setPixmap(pixmap.scaled(
-                        posterLabel->size(),
-                        Qt::KeepAspectRatioByExpanding,
-                        Qt::SmoothTransformation
-                    ));
+                if (currentPosterPixmap.loadFromData(reply->readAll())) {
+                    updatePosterPixmap();
                 } else {
                     posterLabel->setText("Sin Imagen");
                 }
@@ -201,14 +208,13 @@ void MovieDetailsWidget::loadMovie(int mediaId) {
         posterLabel->setText("Sin Imagen");
     }
 
-    // Limpiar botones de servidores anteriores
+    // Limpiar servidores antiguos
     QLayoutItem* item;
     while ((item = serversLayout->takeAt(0)) != nullptr) {
         if (item->widget()) item->widget()->deleteLater();
         delete item;
     }
 
-    // Cargar Botones de Servidores (Voe, Vimeo, etc.)
     QList<QVariantMap> servers = movie["servers"].value<QList<QVariantMap>>();
 
     if (servers.isEmpty()) {
