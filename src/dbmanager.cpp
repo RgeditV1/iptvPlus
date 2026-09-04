@@ -38,22 +38,13 @@ bool DbManager::initDatabase() {
         return false;
     }
 
-    qDebug() << "[DbManager] Base de datos conectada con éxito en:" << dbPath;
+    // Configurar modo WAL y timeout largo para permitir acceso concurrente con scrap.exe
+    QSqlQuery PRAGMA(m_db);
+    PRAGMA.exec("PRAGMA journal_mode = WAL;");
+    PRAGMA.exec("PRAGMA foreign_keys = ON;");
+    PRAGMA.exec("PRAGMA busy_timeout = 30000;");
 
-    // Crear tablas básicas si no existen
-    QSqlQuery query;
-    query.exec("CREATE TABLE IF NOT EXISTS movies ("
-               "id INTEGER PRIMARY KEY,"
-               "title TEXT,"
-               "poster TEXT"
-               ");");
-
-    query.exec("CREATE TABLE IF NOT EXISTS streams ("
-               "id INTEGER PRIMARY KEY AUTOINCREMENT,"
-               "media_id INTEGER,"
-               "server TEXT,"
-               "url TEXT"
-               ");");
+    qDebug() << "[DbManager] Conectado exitosamente a la base de datos de Python en:" << dbPath;
 
     return true;
 }
