@@ -12,6 +12,7 @@ public:
 
     bool initDatabase();
     QList<QVariantMap> getMovies(int limit = 20);
+    QVariantMap getMovieDetails(int mediaId);
     QVariantMap getMovieDetailsWithStream(int mediaId);
 
 private:

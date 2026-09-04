@@ -30,6 +30,8 @@ set(PROJECT_SOURCES
     src/movies.cpp
     include/movies.hpp
     src/dbmanager.cpp
+    src/moviedetailswidget.cpp
+    include/moviedetailswidget.hpp
     include/dbmanager.hpp
     include/channellistmodel.hpp
     include/mainwindow.hpp

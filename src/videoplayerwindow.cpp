@@ -524,6 +524,16 @@ bool VideoPlayerWindow::eventFilter(QObject* watched, QEvent* event)
     return QWidget::eventFilter(watched, event);
 }
 
+void VideoPlayerWindow::setNavigationButtonsVisible(bool visible)
+{
+    if (btnPrevious) {
+        btnPrevious->setVisible(visible);
+    }
+    if (btnNext) {
+        btnNext->setVisible(visible);
+    }
+}
+
 void VideoPlayerWindow::playMedia(const QString& url)
 {
     if (!mpv) {

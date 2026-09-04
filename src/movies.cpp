@@ -260,14 +260,7 @@ void MoviesWidget::addMovieCard(int mediaId, const QString& title, const QString
     clickOverlay->setStyleSheet("background: transparent; border: none;");
 
     connect(clickOverlay, &QPushButton::clicked, this, [this, mediaId]() {
-        QVariantMap streamData = DbManager::instance().getMovieDetailsWithStream(mediaId);
-        QString streamUrl = streamData["stream_url"].toString();
-
-        if (!streamUrl.isEmpty()) {
-            emit movieSelected(streamUrl);
-        } else {
-            qWarning() << "[MoviesWidget] Sin enlaces de reproducción válidos para media_id:" << mediaId;
-        }
+        emit movieSelected(mediaId); // Emitimos el ID de la base de datos
     });
 
     int row = index / columnsCount;
