@@ -13,7 +13,14 @@
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent), playerWindow(nullptr)
 {
-    setWindowTitle("IPTV Plus - Panel Principal");
+    setWindowTitle("IPTV Plus");
+    
+    QIcon icon(":/iptv-icon.png");
+
+    qDebug() << "Icono válido:" << !icon.isNull();
+
+    setWindowIcon(icon);
+
     resize(950, 550);
 
     setupUi();
