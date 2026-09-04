@@ -16,5 +16,6 @@
         <file>resources/icons/maximize.svg</file>
         <file>resources/icons/minimize.svg</file>
         <file>resources/icons/stop-circle.svg</file>
+        <file>iptv-icon.png</file>
     </qresource>
 </RCC>
