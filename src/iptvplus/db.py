@@ -10,10 +10,8 @@ def get_app_data_dir(app_name: str = "iptvPlus") -> Path:
     o ~/.local/share para Linux/macOS. 
     """
     if sys.platform == "win32":
-        # C:\Users\<Usuario>\AppData\Local\iptvPlus
         base_path = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local"))
     else:
-        # Linux / macOS fallback (~/.local/share/iptvPlus)
         base_path = Path.home() / ".local" / "share"
 
     data_dir = base_path / app_name
@@ -24,7 +22,8 @@ def get_app_data_dir(app_name: str = "iptvPlus") -> Path:
 DB_PATH = get_app_data_dir("iptvPlus") / "database.db"
 
 def get_connection():
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, timeout=30.0)
+    conn.execute("PRAGMA journal_mode = WAL;")
     conn.execute("PRAGMA foreign_keys = ON;")
     conn.row_factory = sqlite3.Row
     return conn
@@ -108,19 +107,27 @@ def save_media_item(
     with get_connection() as conn:
         cursor = conn.cursor()
         
-        cursor.execute("""
-            INSERT INTO media (title, type, url, poster, description, rating, trailer)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(url) DO UPDATE SET
-                title=excluded.title,
-                poster=coalesce(excluded.poster, media.poster),
-                description=coalesce(excluded.description, media.description),
-                rating=coalesce(excluded.rating, media.rating),
-                trailer=coalesce(excluded.trailer, media.trailer)
-            RETURNING id;
-        """, (title, media_type, url, poster, description, rating, trailer))
-        
-        media_id = cursor.fetchone()["id"]
+        cursor.execute("SELECT id FROM media WHERE url = ?", (url,))
+        existing = cursor.fetchone()
+
+        if existing:
+            media_id = existing["id"]
+            cursor.execute("""
+                UPDATE media SET
+                    title = ?,
+                    type = ?,
+                    poster = COALESCE(?, poster),
+                    description = COALESCE(?, description),
+                    rating = COALESCE(?, rating),
+                    trailer = COALESCE(?, trailer)
+                WHERE id = ?;
+            """, (title, media_type, poster, description, rating, trailer, media_id))
+        else:
+            cursor.execute("""
+                INSERT INTO media (title, type, url, poster, description, rating, trailer)
+                VALUES (?, ?, ?, ?, ?, ?, ?);
+            """, (title, media_type, url, poster, description, rating, trailer))
+            media_id = cursor.lastrowid
 
         if genres:
             for genre_name in genres:
