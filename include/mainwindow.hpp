@@ -16,6 +16,7 @@
 #include <QRandomGenerator>
 #include <QStackedWidget>
 #include <QComboBox>
+#include <QResizeEvent>
 
 class VideoPlayerWindow;
 class QLineEdit;
@@ -39,6 +40,8 @@ protected:
      * @return true si el evento fue gestionado completamente; false de lo contrario.
      */
     bool eventFilter(QObject* watched, QEvent* event) override;
+
+    void resizeEvent(QResizeEvent* event) override;
 
 private slots:
     /**
@@ -106,6 +109,8 @@ private:
     UpdateNotifier* updateNotifier;
 
     MovieDetailsWidget* movieDetailsWidget;
+
+    void updateMenuButtonPosition();
 
     /**
      * @brief Configura la estructura visual y propiedades del panel lateral de canales.
