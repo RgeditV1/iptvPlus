@@ -1,631 +1,188 @@
 #include "mainwindow.hpp"
 #include "videoplayerwindow.hpp"
+#include "tv.hpp"
 
-#include <QPushButton>
-#include <QLineEdit>
-#include <QScrollBar>
-#include <QVBoxLayout>
 #include <QHBoxLayout>
+#include <QVBoxLayout>
+#include <QLabel>
+#include <QIcon>
 #include <QHeaderView>
-#include <QEasingCurve>
-#include <QDebug>
+#include <QMouseEvent>
 
 MainWindow::MainWindow(QWidget* parent)
-    : QMainWindow(parent), playerWindow(nullptr)
+    : QMainWindow(parent)
 {
-    setWindowTitle("IPTV Plus");
-    
-    QIcon icon(":/iptv-icon.png");
-
-    qDebug() << "Icono válido:" << !icon.isNull();
-
-    setWindowIcon(icon);
-
-    resize(950, 550);
+    setWindowTitle("IPTV++");
+    resize(1280, 720);
 
     setupUi();
+    setupSidebar();
 
-    channelAnimation = new QPropertyAnimation(channelPanel, "maximumWidth", this);
-    channelAnimation->setDuration(200);
-    channelAnimation->setEasingCurve(QEasingCurve::OutCubic);
-
-    connect(channelAnimation, &QPropertyAnimation::valueChanged, this, [this]() {
-    updateMenuButtonPosition();
-    });
-
-    updateNotifier = new UpdateNotifier(this);
-
-    connect(updateNotifier, &UpdateNotifier::remoteChannelsLoaded,
-        this, [this](const QList<M3UItem>& channels) {
-
-            currentChannels = channels;
-
-            populateChannelPanel();
-            playRandomChannel();
-        });
-
-    updateNotifier->fetchRemoteStreams();
-
-    QTimer::singleShot(0, this, [this]() {
-    updateMenuButtonPosition();
-    });
+    m_centralContainer->installEventFilter(this);
 }
 
-MainWindow::~MainWindow() {}
+MainWindow::~MainWindow() = default;
 
-bool MainWindow::eventFilter(QObject* watched, QEvent* event)
+void MainWindow::setupUi()
 {
-    if (watched == channelPanel ||
-        watched == categorySearch ||
-        watched == categoryList) {
+    m_centralContainer = new QWidget(this);
+    m_centralContainer->setStyleSheet("background-color: black;");
+    setCentralWidget(m_centralContainer);
 
-        if (event->type() == QEvent::Enter) {
+    QVBoxLayout* mainContainerLayout = new QVBoxLayout(m_centralContainer);
+    mainContainerLayout->setContentsMargins(0, 0, 0, 0);
+    mainContainerLayout->setSpacing(0);
 
-            categoryList->setVerticalScrollBarPolicy(
-                Qt::ScrollBarAsNeeded
-            );
-        }
-        else if (event->type() == QEvent::Leave) {
-
-            categoryList->setVerticalScrollBarPolicy(
-                Qt::ScrollBarAlwaysOff
-            );
-        }
-    }
-
-    return QMainWindow::eventFilter(watched, event);
-}
-
-void MainWindow::setupUi() {
-    QWidget* centralWidget = new QWidget(this);
-    centralWidget->setStyleSheet("background-color: black;");
-
-    QHBoxLayout* mainLayout = new QHBoxLayout(centralWidget);
-    mainLayout->setContentsMargins(0, 0, 0, 0);
-    mainLayout->setSpacing(0);
-
-    // =========================================================
-    // 1. PANEL LATERAL (Sidebar)
-    // =========================================================
-    sidebarWidget = new QWidget(this);
-    sidebarWidget->setFixedWidth(160);
-    sidebarWidget->setStyleSheet(
-        "QWidget { background-color: #1e1e24; color: white; }"
-        "QLineEdit { background-color: #2b2b36; border: 1px solid #3a3a4c; "
-        "            padding: 5px; border-radius: 4px; color: white; }"
-        "QTreeWidget {"
-        "    background-color: #18181c;"
-        "    border: none;"
-        "    outline: none;"
-        "    color: white;"
-        "}"
-        "QTreeWidget::item {"
-        "    padding: 8px 6px;"
-        "    border: none;"
-        "    outline: none;"
-        "    border-bottom: 1px solid #282830;"
-        "}"
-        "QTreeWidget::item:hover {"
-        "    background-color: #2a2a35;"
-        "}"
-        "QTreeWidget::item:selected, QTreeWidget::item:selected:!active {"
-        "    background-color: #007acc;"
-        "    color: white;"
-        "}"
-    );
-
-    QVBoxLayout* sidebarLayout = new QVBoxLayout(sidebarWidget);
-    sidebarLayout->setContentsMargins(8, 8, 8, 8);
-    sidebarLayout->setSpacing(6);
-
-    treeMenu = new QTreeWidget(sidebarWidget);
-    treeMenu->setColumnCount(2);
-    treeMenu->setHeaderHidden(true);
-    treeMenu->setIndentation(10);
-    treeMenu->setIconSize(QSize(18, 18));
-    treeMenu->header()->setSectionResizeMode(0, QHeaderView::Fixed);
-    treeMenu->header()->setSectionResizeMode(1, QHeaderView::Fixed);
-    treeMenu->setColumnWidth(1, 16);
-
-    // --- Categoría Principal: Canales ---
-    itemCanales = new QTreeWidgetItem(treeMenu);
-    itemCanales->setText(0, "Canales");
-    itemCanales->setIcon(0, QIcon(":/resources/icons/tv.svg"));
-    itemCanales->setIcon(1, QIcon(":/resources/icons/arrow-right.svg"));
-    itemCanales->setTextAlignment(1, Qt::AlignCenter);
-
-    // --- Categoría: Películas ---
-    itemPeliculas = new QTreeWidgetItem(treeMenu);
-    itemPeliculas->setText(0, "Películas");
-    itemPeliculas->setIcon(0, QIcon(":/resources/icons/film.svg"));
-
-    sidebarLayout->addWidget(treeMenu);
-    treeMenu->setCurrentItem(itemCanales); // por defecto
-
-    sidebarWidget->hide();
-
-    // =========================================================
-    // 2. PANEL DE LISTA DE CANALES
-    // =========================================================
-    channelPanel = new QFrame(centralWidget);
-    channelPanel->setMinimumWidth(0);
-    channelPanel->setMaximumWidth(0);
-    channelPanel->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Expanding);
-    channelPanel->setFrameShape(QFrame::NoFrame);
-
-    setupChannelPanel();
-
-    // =========================================================
-    // 3. VISTA DERECHA (BARRA SUPERIOR + STACKED WIDGET)
-    // =========================================================
-    QWidget* rightWidget = new QWidget(this);
-    QVBoxLayout* rightLayout = new QVBoxLayout(rightWidget);
-    rightLayout->setContentsMargins(0, 0, 0, 0);
-    rightLayout->setSpacing(0);
-
-    // --- BARRA SUPERIOR (TOP BAR) ---
+    // Layout superior para la barra de herramientas / botón menú
     QHBoxLayout* topBarLayout = new QHBoxLayout();
-    topBarLayout->setContentsMargins(48, 6, 8, 6);
-    topBarLayout->setSpacing(8);
+    topBarLayout->setContentsMargins(10, 10, 10, 10);
 
-    btnToggleMenu = new QPushButton(this);
-    btnToggleMenu->setIcon(QIcon(":/resources/icons/menu.svg"));
-    btnToggleMenu->setIconSize(QSize(24, 24));
-    btnToggleMenu->setCursor(Qt::PointingHandCursor);
-    btnToggleMenu->setToolTip("Menu");
-    btnToggleMenu->setFixedSize(36, 36);
-
-    btnToggleMenu->setStyleSheet(
+    m_menuButton = new QPushButton(m_centralContainer);
+    m_menuButton->setText(" Menú");
+    m_menuButton->setIcon(QIcon(":/resources/icons/menu.svg"));
+    m_menuButton->setCursor(Qt::PointingHandCursor);
+    m_menuButton->setStyleSheet(
         "QPushButton {"
-        "    background-color: transparent;"
-        "    border: none;"
-        "    border-radius: 4px;"
+        "   background-color: #313244;"
+        "   color: #cdd6f4;"
+        "   border: none;"
+        "   padding: 8px 12px;"
+        "   border-radius: 5px;"
+        "   font-weight: bold;"
         "}"
         "QPushButton:hover {"
-        "    background-color: rgba(255, 255, 255, 30);"
-        "}"
-        "QPushButton:pressed {"
-        "    background-color: rgba(255, 255, 255, 50);"
+        "   background-color: #45475a;"
         "}"
     );
 
-    btnToggleMenu->move(6, 6);
-    btnToggleMenu->raise();
+    topBarLayout->addWidget(m_menuButton);
+    topBarLayout->addStretch();
+    mainContainerLayout->addLayout(topBarLayout);
 
-    txtUrl = new QLineEdit(this);
-    txtUrl->setPlaceholderText("Ingresa la URL..");
+    // QStackedWidget para gestionar las diferentes vistas en centralContainer
+    m_stackedWidget = new QStackedWidget(m_centralContainer);
 
-    btnOpenPlayer = new QPushButton("Reproducir Canal", this);
-    btnOpenPlayer->setCursor(Qt::PointingHandCursor);
+    // Vista Películas
+    m_moviesView = new QWidget(this);
+    QVBoxLayout* moviesLayout = new QVBoxLayout(m_moviesView);
+    QLabel* moviesLabel = new QLabel("Sección de Películas (Vacía)", m_moviesView);
+    moviesLabel->setAlignment(Qt::AlignCenter);
+    moviesLabel->setStyleSheet("color: #a6adc8; font-size: 18px;");
+    moviesLayout->addWidget(moviesLabel);
 
-    searchMoviesEdit = new QLineEdit(this);
-    searchMoviesEdit->setPlaceholderText("Buscar películas...");
-    searchMoviesEdit->hide(); // Oculto por defecto
+    // Vista TV integrada con reproductor y barra lateral de canales
+    m_tvView = new TvWidget(this);
 
-    genreComboBox = new QComboBox(this);
-    genreComboBox->addItem("Todos los géneros");
-    genreComboBox->setMinimumWidth(160);
-    genreComboBox->hide(); // Oculto por defecto
+    // Añadir vistas al StackedWidget
+    m_stackedWidget->addWidget(m_tvView);     // Índice 0: TV
+    m_stackedWidget->addWidget(m_moviesView); // Índice 1: Películas
 
-    QString topBarControlsStyle = 
-        "QLineEdit {"
-        "    background-color: #2b2b36;"
-        "    border: 1px solid #3a3a4c;"
-        "    border-radius: 4px;"
-        "    padding: 5px;"
-        "    color: white;"
-        "}"
-        "QComboBox {"
-        "    background-color: #2b2b36;"
-        "    border: 1px solid #3a3a4c;"
-        "    border-radius: 4px;"
-        "    padding: 5px;"
-        "    color: white;"
-        "}"
-        "QComboBox QAbstractItemView {"
-        "    background-color: #1e1e24;"
-        "    color: white;"
-        "    selection-background-color: #007acc;"
-        "}";
-
-    QPushButton* btnBackFromStream = new QPushButton("← Volver a detalles", this);
-    btnBackFromStream->setCursor(Qt::PointingHandCursor);
-    btnBackFromStream->setStyleSheet(
-        "QPushButton {"
-        "    background-color: #2b2b36;"
-        "    border: 1px solid #3a3a4c;"
-        "    border-radius: 4px;"
-        "    padding: 5px 10px;"
-        "    color: white;"
-        "}"
-        "QPushButton:hover { background-color: #3a3a4c; }"
-    );
-
-    btnBackFromStream->hide(); // Oculto por defecto
-
-    searchMoviesEdit->setStyleSheet(topBarControlsStyle);
-    genreComboBox->setStyleSheet(topBarControlsStyle);
-
-    // Alineación vertical centrada para evitar desajustes del botón de menú
-    topBarLayout->addWidget(txtUrl, 1, Qt::AlignVCenter);
-    topBarLayout->addWidget(btnOpenPlayer, 0, Qt::AlignVCenter);
-    topBarLayout->addWidget(searchMoviesEdit, 1, Qt::AlignVCenter);
-    topBarLayout->addWidget(genreComboBox, 0, Qt::AlignVCenter);
-
-    // --- STACKED WIDGET (Pestañas) ---
-    stackedWidget = new QStackedWidget(this);
-
-    // Reproductor (Índice 0)
-    playerWindow = new VideoPlayerWindow(this);
-    playerWindow->setModel(channelModel);
-    stackedWidget->addWidget(playerWindow);
-
-    // Módulo de Películas (Índice 1)
-    moviesWidget = new MoviesWidget(this);
-    stackedWidget->addWidget(moviesWidget);
-
-    // Ficha Técnica / Detalle de Película (Índice 2)
-    movieDetailsWidget = new MovieDetailsWidget(this);
-    stackedWidget->addWidget(movieDetailsWidget);
-
-    rightLayout->addLayout(topBarLayout, 0);
-    rightLayout->addWidget(stackedWidget, 1);
-
-    mainLayout->addWidget(sidebarWidget, 0);
-    mainLayout->addWidget(channelPanel, 0);
-    mainLayout->addWidget(rightWidget, 1);
-
-    setCentralWidget(centralWidget);
-
-    // =========================================================
-    // CONEXIONES
-    // =========================================================
-    connect(btnToggleMenu, &QPushButton::clicked, this, &MainWindow::toggleSidebar);
-    connect(btnOpenPlayer, &QPushButton::clicked, this, &MainWindow::openPlayer);
-    connect(txtUrl, &QLineEdit::returnPressed, this, &MainWindow::openPlayer);
-    connect(categorySearch, &QLineEdit::textChanged, this, &MainWindow::filterChannelItems);
-    connect(treeMenu, &QTreeWidget::itemClicked, this, &MainWindow::onItemClicked);
-    connect(playerWindow, &VideoPlayerWindow::fullScreenToggled, this, &MainWindow::onFullScreenToggled);
-    
-    connect(categoryList, &QListView::clicked, this, [this](const QModelIndex& index) {
-        if (!index.isValid()) return;
-        const QString url = index.data(Qt::UserRole).toString();
-        if (url.isEmpty()) return;
-        
-        // Al hacer clic en un canal, nos aseguramos de mostrar los controles de canales
-        txtUrl->show();
-        btnOpenPlayer->show();
-        searchMoviesEdit->hide();
-        genreComboBox->hide();
-        
-        stackedWidget->setCurrentWidget(playerWindow);
-        
-        txtUrl->setText(url);
-        playerWindow->playChannelAt(index.row());
-    });
-
-    connect(playerWindow, &VideoPlayerWindow::channelChanged, this, [this](int row) {
-        if (!categoryList->model()) return;
-        QModelIndex index = categoryList->model()->index(row, 0);
-        if (!index.isValid()) return;
-        categoryList->setCurrentIndex(index);
-        categoryList->scrollTo(index, QAbstractItemView::PositionAtCenter);
-        txtUrl->setText(index.data(Qt::UserRole).toString());
-    });
-
-    // --- FLUJO FICHA TÉCNICA Y PELÍCULAS ---
-    
-    connect(moviesWidget, &MoviesWidget::movieSelected, this, [this](int mediaId) {
-        btnToggleMenu->show(); // El menú se mantiene siempre accesible
-        txtUrl->hide();
-        btnOpenPlayer->hide();
-        searchMoviesEdit->hide();
-        genreComboBox->hide();
-
-        movieDetailsWidget->loadMovie(mediaId);
-        stackedWidget->setCurrentWidget(movieDetailsWidget);
-    });
-
-    connect(movieDetailsWidget, &MovieDetailsWidget::backRequested, this, [this]() {
-        btnToggleMenu->show();
-        txtUrl->hide();
-        btnOpenPlayer->hide();
-        searchMoviesEdit->show();
-        genreComboBox->show();
-
-        stackedWidget->setCurrentWidget(moviesWidget);
-    });
-
-    connect(movieDetailsWidget, &MovieDetailsWidget::playStreamRequested, this, [this](const QString& streamUrl) {
-        btnToggleMenu->show();
-        txtUrl->hide();
-        btnOpenPlayer->hide();
-        searchMoviesEdit->hide();
-        genreComboBox->hide();
-
-        // Desvincular modelo IPTV y ocultar botones prev/next del reproductor
-        playerWindow->setModel(nullptr);
-        playerWindow->setNavigationButtonsVisible(false);
-
-        // Activar el botón de volver a detalles en la barra inferior del reproductor
-        playerWindow->setBackToDetailsVisible(true);
-
-        stackedWidget->setCurrentWidget(playerWindow);
-        playerWindow->playMedia(streamUrl);
-
-        // Iniciar automáticamente en Pantalla Completa
-        if (!this->isFullScreen()) {
-            playerWindow->toggleFullScreen();
+    connect(m_stackedWidget, &QStackedWidget::currentChanged, this, [this](int newIndex) {
+        if (newIndex != 0 && m_tvView && m_tvView->player()) {
+            m_tvView->player()->pause();
         }
     });
 
-    connect(playerWindow, &VideoPlayerWindow::backToDetailsRequested, this, [this]() {
-        playerWindow->stopMedia();
-        playerWindow->setBackToDetailsVisible(false);
+    mainContainerLayout->addWidget(m_stackedWidget, 1);
 
-        // Salir de pantalla completa si está activa
-        if (this->isFullScreen()) {
-            playerWindow->toggleFullScreen();
-        }
-
-        // Mantener ocultos txtUrl y btnOpenPlayer al volver a la vista de detalles
-        btnToggleMenu->show();
-        txtUrl->hide();
-        btnOpenPlayer->hide();
-        searchMoviesEdit->hide();
-        genreComboBox->hide();
-
-        stackedWidget->setCurrentWidget(movieDetailsWidget);
-        updateMenuButtonPosition();
-    });
-
-    // Activar búsqueda al presionar ENTER en el campo de texto de películas
-    connect(searchMoviesEdit, &QLineEdit::returnPressed, this, [this]() {
-        QString query = searchMoviesEdit->text().trimmed();
-        QString genre = genreComboBox->currentText();
-        moviesWidget->loadMovies(query, genre);
-    });
-
-    // Activar filtro al cambiar la selección en el combo box de géneros
-    connect(genreComboBox, &QComboBox::currentTextChanged, this, [this](const QString& genre) {
-        QString query = searchMoviesEdit->text().trimmed();
-        moviesWidget->loadMovies(query, genre);
+    connect(m_menuButton, &QPushButton::clicked, this, [this]() {
+        toggleSidebar();
     });
 }
 
-void MainWindow::resizeEvent(QResizeEvent* event) {
-    QMainWindow::resizeEvent(event);
-    updateMenuButtonPosition();
-}
-
-void MainWindow::toggleChannelPanel()
+void MainWindow::setupSidebar()
 {
-    channelAnimation->stop();
+    m_sidebar = new QWidget(m_centralContainer);
+    m_sidebar->setStyleSheet(
+        "QWidget { background-color: #1e1e2e; color: #ffffff; }"
+        "QTreeWidget { background-color: #181825; border: none; color: #cdd6f4; outline: none; }"
+        "QTreeWidget::item { padding: 12px; border-radius: 4px; }"
+        "QTreeWidget::item:hover { background-color: #313244; }"
+        "QTreeWidget::item:selected { background-color: #45475a; color: #ffffff; font-weight: bold; }"
+    );
 
-    const int currentWidth = channelPanel->width();
-    const int targetWidth = (currentWidth > 0) ? 0 : 280;
+    QVBoxLayout* sidebarLayout = new QVBoxLayout(m_sidebar);
+    sidebarLayout->setContentsMargins(10, 10, 10, 10);
 
-    channelAnimation->setStartValue(currentWidth);
-    channelAnimation->setEndValue(targetWidth);
+    m_navTree = new QTreeWidget(m_sidebar);
+    m_navTree->setHeaderHidden(true);
+    m_navTree->setColumnCount(1);
 
-    channelAnimation->start();
+    // Crear elementos de menú vertical (Tree)
+    QTreeWidgetItem* tvItem = new QTreeWidgetItem(m_navTree);
+    tvItem->setIcon(0, QIcon(":/resources/icons/tv.svg"));
+    tvItem->setText(0, "TV");
+    tvItem->setData(0, Qt::UserRole, 0); // Índice para el QStackedWidget
+
+    QTreeWidgetItem* moviesItem = new QTreeWidgetItem(m_navTree);
+    moviesItem->setIcon(0, QIcon(":/resources/icons/film.svg"));
+    moviesItem->setText(0, "Películas");
+    moviesItem->setData(0, Qt::UserRole, 1); // Índice para el QStackedWidget
+
+    m_navTree->setCurrentItem(tvItem);
+
+    sidebarLayout->addWidget(m_navTree);
+
+    connect(m_navTree, &QTreeWidget::itemClicked, this, &MainWindow::onNavigationItemClicked);
+
+    m_sidebar->setGeometry(-m_sidebarWidth, 0, m_sidebarWidth, height());
+    m_sidebar->raise();
+
+    m_sidebarAnimation = new QPropertyAnimation(m_sidebar, "geometry", this);
+    m_sidebarAnimation->setDuration(200);
 }
 
-void MainWindow::setupChannelPanel()
-{
-    QVBoxLayout* layout = new QVBoxLayout(channelPanel);
-
-    layout->setContentsMargins(8, 8, 8, 8);
-    layout->setSpacing(6);
-
-    categorySearch = new QLineEdit(channelPanel);
-
-    categorySearch->setPlaceholderText(
-        "Buscar canales..."
-    );
-
-    channelModel = new ChannelListModel(this);
-
-    categoryList = new QListView(channelPanel);
-
-    categoryList->setModel(channelModel);
-
-    categoryList->setSizePolicy(
-        QSizePolicy::Expanding,
-        QSizePolicy::Expanding
-    );
-
-    categoryList->setVerticalScrollBarPolicy(
-        Qt::ScrollBarAlwaysOff
-    );
-
-    categoryList->setHorizontalScrollBarPolicy(
-        Qt::ScrollBarAlwaysOff
-    );
-
-    categoryList->setIconSize(
-        QSize(18, 18)
-    );
-
-    categoryList->setSelectionMode(
-        QAbstractItemView::SingleSelection
-    );
-
-    categoryList->setUniformItemSizes(true);
-
-    layout->addWidget(categorySearch);
-    layout->addWidget(categoryList);
-
-    categorySearch->installEventFilter(this);
-    categoryList->installEventFilter(this);
-    channelPanel->installEventFilter(this);
-}
-
-void MainWindow::onItemClicked(QTreeWidgetItem* item, int column)
+void MainWindow::onNavigationItemClicked(QTreeWidgetItem* item, int column)
 {
     Q_UNUSED(column);
-
     if (!item)
         return;
 
-    if (item == itemCanales) {
-        if (playerWindow) {
-            openPlayer();
-        }
-        // Restablecer el modelo M3U y mostrar botones de navegación
-        playerWindow->setModel(channelModel);
-        playerWindow->setNavigationButtonsVisible(true);
+    int targetIndex = item->data(0, Qt::UserRole).toInt();
+    m_stackedWidget->setCurrentIndex(targetIndex);
 
-        // Ocultar controles de Películas
-        searchMoviesEdit->hide();
-        genreComboBox->hide();
-
-        // Mostrar controles de Canales
-        txtUrl->show();
-        btnOpenPlayer->show();
-
-        // Cambiar vista al reproductor
-        stackedWidget->setCurrentWidget(playerWindow);
-        toggleChannelPanel();
-        return;
-    }
-
-    if (item == itemPeliculas) {
-        if (playerWindow) {
-            playerWindow->stopMedia();
-        }
-
-        txtUrl->hide();
-        btnOpenPlayer->hide();
-
-        searchMoviesEdit->show();
-        genreComboBox->show();
-
-        stackedWidget->setCurrentWidget(moviesWidget);
-
-        if (channelPanel->width() > 0) {
-            toggleChannelPanel();
-        }
-
-        // Cargar catálogo inicial de películas
-        moviesWidget->loadMovies(searchMoviesEdit->text().trimmed(), genreComboBox->currentText());
-        return;
-    }
-
-    QString url = item->data(0, Qt::UserRole).toString();
-
-    if (!url.isEmpty()) {
-        searchMoviesEdit->hide();
-        genreComboBox->hide();
-        txtUrl->show();
-        btnOpenPlayer->show();
-
-        stackedWidget->setCurrentWidget(playerWindow);
-        txtUrl->setText(url);
-        openPlayer();
-    }
+    toggleSidebar(false);
 }
 
-void MainWindow::toggleSidebar() {
-    bool willBeVisible = !sidebarWidget->isVisible();
-
-    if (!willBeVisible && channelPanel->maximumWidth() > 0) {
-        toggleChannelPanel();
-    }
-
-    sidebarWidget->setVisible(willBeVisible);
-    updateMenuButtonPosition();
-}
-
-void MainWindow::onFullScreenToggled(bool isFullScreen)
+void MainWindow::toggleSidebar()
 {
-    if (isFullScreen) {
-        // Guardar el estado previo de los paneles
-        sidebarWasVisibleBeforeFS = sidebarWidget->isVisible();
-        channelPanelWasOpenBeforeFS = (channelPanel->width() > 0);
-
-        // Ocultar la barra superior (Top Bar)
-        btnToggleMenu->hide();
-        txtUrl->hide();
-        btnOpenPlayer->hide();
-
-        sidebarWidget->hide();
-
-        channelAnimation->stop();
-        channelPanel->setMaximumWidth(0);
-
-    } else {
-        btnToggleMenu->show();
-        updateMenuButtonPosition();
-        txtUrl->show();
-
-        btnOpenPlayer->show();
-        if (sidebarWasVisibleBeforeFS) {
-            sidebarWidget->show();
-        }
-
-        if (channelPanelWasOpenBeforeFS) {
-            channelAnimation->stop();
-            channelAnimation->setStartValue(channelPanel->width());
-            channelAnimation->setEndValue(280);
-            channelAnimation->start();
-        }
-    }
+    toggleSidebar(!m_sidebarVisible);
 }
 
-void MainWindow::updateMenuButtonPosition() {
-    if (!btnToggleMenu) return;
-
-    int offsetX = 6;
-
-    if (sidebarWidget && sidebarWidget->isVisible()) {
-        offsetX += sidebarWidget->width();
-    }
-
-    if (channelPanel && channelPanel->width() > 0) {
-        offsetX += channelPanel->width();
-    }
-
-    // Posicionar botón de menú
-    btnToggleMenu->move(offsetX, 6);
-    btnToggleMenu->raise();
-}
-
-void MainWindow::populateChannelPanel()
+void MainWindow::toggleSidebar(bool show)
 {
-    channelModel->setChannels(currentChannels);
-}
-
-void MainWindow::playRandomChannel() {
-    if (currentChannels.isEmpty() || !channelModel) return; //[cite: 7]
-
-    int totalRows = channelModel->rowCount(); //[cite: 3, 5]
-    if (totalRows == 0) return;
-
-    int randomIndex = QRandomGenerator::global()->bounded(totalRows);
-
-    // Seleccionar y reproducir mediante el índice del modelo
-    const M3UItem* item = channelModel->channelAt(randomIndex); //[cite: 3, 5]
-    if (item) {
-        txtUrl->setText(item->url); //[cite: 7]
-        playerWindow->playChannelAt(randomIndex); // <--- CAMBIADO[cite: 7]
-    }
-}
-
-void MainWindow::filterChannelItems(
-    const QString& text)
-{
-    channelModel->filter(text);
-}
-
-void MainWindow::openPlayer() {
-    QString url = txtUrl->text().trimmed();
-
-    if (url.isEmpty()) {
-        qWarning() << "[MainWindow] Intento de reproducción con URL vacía.";
+    if (m_sidebarVisible == show)
         return;
-    }
 
-    qDebug() << "[MainWindow] Cargando URL:" << url;
-    playerWindow->playMedia(url);
+    m_sidebarVisible = show;
+    m_sidebarAnimation->stop();
+    m_sidebarAnimation->setStartValue(m_sidebar->geometry());
+
+    int targetX = show ? 0 : -m_sidebarWidth;
+    m_sidebarAnimation->setEndValue(QRect(targetX, 0, m_sidebarWidth, height()));
+    m_sidebarAnimation->start();
+}
+
+bool MainWindow::eventFilter(QObject* watched, QEvent* event)
+{
+    if (watched == m_centralContainer) {
+        if (event->type() == QEvent::MouseMove) {
+            auto* mouseEvent = static_cast<QMouseEvent*>(event);
+            int mouseX = mouseEvent->pos().x();
+
+            if (!m_sidebarVisible && mouseX <= 20) {
+                toggleSidebar(true);
+            } else if (m_sidebarVisible && mouseX > m_sidebarWidth) {
+                toggleSidebar(false);
+            }
+        }
+    }
+    return QMainWindow::eventFilter(watched, event);
+}
+
+void MainWindow::resizeEvent(QResizeEvent* event)
+{
+    QMainWindow::resizeEvent(event);
+    int currentX = m_sidebarVisible ? 0 : -m_sidebarWidth;
+    m_sidebar->setGeometry(currentX, 0, m_sidebarWidth, height());
 }
