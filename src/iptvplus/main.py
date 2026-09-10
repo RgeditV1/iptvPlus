@@ -1,7 +1,19 @@
 import argparse
 import sys
-from .scraper import search_movies, get_by_genre, get_movie_details, get_genres
-from .db import init_db, clear_db, save_movie, get_saved_movies, get_streams_by_language
+from pathlib import Path
+
+if getattr(sys, 'frozen', False):
+    # Ejecutando desde el ejecutable de PyInstaller
+    BASE_DIR = Path(sys._MEIPASS)
+else:
+    BASE_DIR = Path(__file__).resolve().parent
+
+# Añadir el directorio al PATH de búsqueda de módulos de Python
+if str(BASE_DIR) not in sys.path:
+    sys.path.insert(0, str(BASE_DIR))
+
+from scraper import search_movies, get_by_genre, get_movie_details, get_genres
+from db import init_db, clear_db, save_movie, get_saved_movies, get_streams_by_language
 
 
 def main():
