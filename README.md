@@ -3,16 +3,14 @@ Video Player for ```.m3u``` Files and Movies, Series is Coming Soon
 
 ![screenshoot](/screenshoot.png "IPTV ++ Screenshoot")
 
-### build Visual Studio 2026
-
-#### Config
+### Build
 
 Before run compilation command, you need ``libmpv-2.dll``, that is include in ``3rdparty/mpv`` in 4 compressed files.
 
 ```sh
 cmake -S . -B build `
-  -G "Visual Studio 18 2026" `
-  "-DQt6_DIR=C:\Qt\6.11.2\msvc2022_64\lib\cmake\Qt6" `
+  -G "Visual Studio 18 2026" -A x64 `
+  "-DQt6_DIR=C:/Qt/6.11.2/msvc2022_64/lib/cmake/Qt6" `
   "-DCMAKE_INSTALL_PREFIX=build/install" `
   "-DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake" # optional, need vcpkg installed
 

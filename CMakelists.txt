@@ -20,8 +20,11 @@ set(THIRDPARTY_DIR "${CMAKE_CURRENT_SOURCE_DIR}/3rdparty")
 
 # Dependencias
 find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets Svg Network sql)
-find_package(boost_system CONFIG REQUIRED)
 
+find_package(Boost REQUIRED COMPONENTS system)
+if(Boost_FOUND)
+    include_directories(${Boost_INCLUDE_DIRS})
+endif()
 
 set(PROJECT_SOURCES
     src/main.cpp
@@ -51,12 +54,22 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     "${THIRDPARTY_DIR}/mpv/include"
 )
 
-# Desactivar componentes no requeridos
+# Desactivar explícitamente libdatachannel / WebRTC e sub-dependencias integradas
+set(WEBRTC OFF CACHE BOOL "" FORCE)
+set(webrtc OFF CACHE BOOL "" FORCE)
+set(BUILD_DATALINK OFF CACHE BOOL "" FORCE)
+
+# Opciones estándar de libtorrent para aligerar la build
 set(build_examples OFF CACHE BOOL "" FORCE)
 set(build_tests OFF CACHE BOOL "" FORCE)
 set(build_tools OFF CACHE BOOL "" FORCE)
 set(python-bindings OFF CACHE BOOL "" FORCE)
-set(webrtc OFF CACHE BOOL "" FORCE) # Desactiva libdatachannel/WebRTC
+
+# Si Boost da problemas con targets, puedes indicarle que use los tipos std::
+set(boost-python OFF CACHE BOOL "" FORCE)
+
+# Evitar conflictos de importación DLL en Boost JSON con MSVC
+add_compile_definitions(BOOST_JSON_NO_LIB BOOST_JSON_STATIC_LINK)
 
 add_subdirectory("${THIRDPARTY_DIR}/libtorrent")
 
@@ -69,7 +82,6 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     Qt6::Network
     Qt6::Sql
     Boost::system # Instala con Vcpkg en dado caso no lo tengas
-    Boost::variant
     torrent-rasterbar
     #Qt6::EntryPointPrivate
     "${THIRDPARTY_DIR}/mpv/libmpv.dll.a"
@@ -106,6 +118,7 @@ if(PYINSTALLER_EXECUTABLE)
                 --noconfirm
                 --onefile
                 --name "${PY_EXE_NAME}"
+                --paths "${CMAKE_CURRENT_SOURCE_DIR}/src/iptvplus"
                 --exclude-module "urllib3.contrib.emscripten"
                 --distpath "${PY_OUTPUT_DIR}/dist"
                 --workpath "${PY_OUTPUT_DIR}/build"
