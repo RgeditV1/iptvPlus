@@ -1,5 +1,6 @@
 #include "mainwindow.hpp"
 #include "videoplayerwindow.hpp"
+#include "movies.hpp"
 #include "tv.hpp"
 
 #include <QHBoxLayout>
@@ -63,12 +64,7 @@ void MainWindow::setupUi()
     m_stackedWidget = new QStackedWidget(m_centralContainer);
 
     // Vista Películas
-    m_moviesView = new QWidget(this);
-    QVBoxLayout* moviesLayout = new QVBoxLayout(m_moviesView);
-    QLabel* moviesLabel = new QLabel("Sección de Películas (Vacía)", m_moviesView);
-    moviesLabel->setAlignment(Qt::AlignCenter);
-    moviesLabel->setStyleSheet("color: #a6adc8; font-size: 18px;");
-    moviesLayout->addWidget(moviesLabel);
+    m_moviesView = new MoviesWidget(this);
 
     // Vista TV integrada con reproductor y barra lateral de canales
     m_tvView = new TvWidget(this);

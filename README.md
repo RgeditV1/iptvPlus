@@ -12,7 +12,8 @@ cmake -S . -B build `
   -G "Visual Studio 18 2026" -A x64 `
   "-DQt6_DIR=C:/Qt/6.11.2/msvc2022_64/lib/cmake/Qt6" `
   "-DCMAKE_INSTALL_PREFIX=build/install" `
-  "-DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake" # optional, need vcpkg installed
+  "-DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake"  `
+  "-DVCPKG_TARGET_TRIPLET=x64-windows-static-md"
 
 # you can use Debug mode too
 cmake --build build --config Release
@@ -25,9 +26,7 @@ cpack --config build/CPackConfig.cmake -C Release
 ### 3rdpartys
 
 - ``mpv`` (videoplayer)
-- ``libtorrent`` (and submodules)
+- ``libtorrent`` (should use vcpkg)
 - ``vcpkg`` for lib magnaments (optional but recomended)
 - ``OpenSSL`` (should use vcpkg)
 - ``Boost`` (should use vcpkg)
-
-

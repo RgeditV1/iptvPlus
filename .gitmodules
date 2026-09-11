@@ -1,4 +1,1 @@
 
-[submodule "3rdparty/libtorrent"]
-	path = 3rdparty/libtorrent
-	url = https://github.com/arvidn/libtorrent.git
