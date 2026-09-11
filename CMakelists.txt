@@ -1,11 +1,16 @@
 cmake_minimum_required(VERSION 4.0)
 project(iptvPlus VERSION 0.2 LANGUAGES CXX)
 
+# =============================================================================
+# C++ CONFIGURATION
+# =============================================================================
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 
 if(NOT CMAKE_BUILD_TYPE)
-    set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Choose Build Type" FORCE)
+    set(CMAKE_BUILD_TYPE Release CACHE STRING "Choose Build Type" FORCE)
 endif()
 
 if(MSVC)
@@ -18,176 +23,218 @@ set(CMAKE_AUTORCC ON)
 
 set(THIRDPARTY_DIR "${CMAKE_CURRENT_SOURCE_DIR}/3rdparty")
 
-# Dependencias
-find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets Svg Network sql)
+# Forzar el uso de librerías estáticas para OpenSSL
+set(OPENSSL_USE_STATIC_LIBS ON CACHE BOOL "" FORCE)
+
+find_package(Qt6 REQUIRED COMPONENTS
+    Core
+    Gui
+    Widgets
+    Svg
+    Network
+    Sql
+)
 
 find_package(Boost REQUIRED COMPONENTS system)
+find_package(OpenSSL REQUIRED)
+find_package(LibtorrentRasterbar REQUIRED)
 
-if(Boost_FOUND)
-    include_directories(${Boost_INCLUDE_DIRS})
-endif()
+# =============================================================================
+# PROJECT SOURCES
+# =============================================================================
 
 set(PROJECT_SOURCES
-
-# main
+    # Main
     src/main.cpp
 
-#Mpv Wrapper
+    # Database
+    src/databasemanager.cpp
+    include/databasemanager.hpp
+
+    # Torrent Engine
+    src/torrentengine.cpp
+    include/torrentengine.hpp
+
+    # MPV
     src/mpvplayer.cpp
     include/mpvplayer.hpp
 
-# videoplayerwindow
+    # Video Player
     src/videoplayerwindow.cpp
     include/videoplayerwindow.hpp
 
-# mainwindow
+    # Main Window
     src/mainwindow.cpp
     include/mainwindow.hpp
 
-# TV
+    # TV
     src/tv/channellistmodel.cpp
     src/tv/m3uparser.cpp
     src/tv/tv.cpp
+
     include/tv/channellistmodel.hpp
     include/tv/m3uparser.hpp
-    include/update.hpp
     include/tv/tv.hpp
+    include/update.hpp
 
-#Resources
+    # Movies
+    src/movie/movies.cpp
+    include/movie/movies.hpp
+
+    # Resources
     resources.qrc
     icon.rc
 )
 
-add_executable(${PROJECT_NAME} WIN32 ${PROJECT_SOURCES})
+# =============================================================================
+# EXECUTABLE
+# =============================================================================
 
-target_include_directories(${PROJECT_NAME} PRIVATE
+add_executable(
+    ${PROJECT_NAME}
+    WIN32
+    ${PROJECT_SOURCES}
+)
+
+# =============================================================================
+# INCLUDE DIRECTORIES
+# =============================================================================
+
+target_include_directories(
+    ${PROJECT_NAME}
+    PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/include"
     "${CMAKE_CURRENT_SOURCE_DIR}/include/tv"
+    "${CMAKE_CURRENT_SOURCE_DIR}/include/movie"
     "${THIRDPARTY_DIR}/mpv/include"
 )
 
-# Desactivar explícitamente libdatachannel / WebRTC e sub-dependencias integradas
-set(WEBRTC OFF CACHE BOOL "" FORCE)
-set(webrtc OFF CACHE BOOL "" FORCE)
-set(BUILD_DATALINK OFF CACHE BOOL "" FORCE)
+# =============================================================================
+# COMPILE DEFINITIONS
+# =============================================================================
 
-# Opciones estándar de libtorrent para aligerar la build
-set(build_examples OFF CACHE BOOL "" FORCE)
-set(build_tests OFF CACHE BOOL "" FORCE)
-set(build_tools OFF CACHE BOOL "" FORCE)
-set(python-bindings OFF CACHE BOOL "" FORCE)
+target_compile_definitions(
+    ${PROJECT_NAME}
+    PRIVATE
+    BOOST_ALL_NO_LIB
+)
 
-# Si Boost da problemas con targets, puedes indicarle que use los tipos std::
-set(boost-python OFF CACHE BOOL "" FORCE)
+# =============================================================================
+# LINK LIBRARIES
+# =============================================================================
 
-# Evitar conflictos de importación DLL en Boost JSON con MSVC
-add_compile_definitions(BOOST_JSON_NO_LIB BOOST_JSON_STATIC_LINK)
-
-add_subdirectory("${THIRDPARTY_DIR}/libtorrent")
-
-# Enlazar la librería explícitamente
-target_link_libraries(${PROJECT_NAME} PRIVATE
+target_link_libraries(
+    ${PROJECT_NAME}
+    PRIVATE
     Qt6::Core
     Qt6::Gui
     Qt6::Widgets
     Qt6::Svg
     Qt6::Network
     Qt6::Sql
-    #Boost::system # Instala con Vcpkg en dado caso no lo tengas
-    #torrent-rasterbar
-    #Qt6::EntryPointPrivate
+    Boost::system
+    OpenSSL::SSL
+    OpenSSL::Crypto
+    LibtorrentRasterbar::torrent-rasterbar
     "${THIRDPARTY_DIR}/mpv/libmpv.dll.a"
 )
 
+# =============================================================================
+# INSTALL
+# =============================================================================
+
 include(GNUInstallDirs)
 
-install(TARGETS ${PROJECT_NAME}
+# Ejecutable
+install(
+    TARGETS ${PROJECT_NAME}
     RUNTIME DESTINATION .
 )
 
-# mpv
-install(FILES
-    "${THIRDPARTY_DIR}/mpv/libmpv-2.dll"
+# MPV sigue siendo una DLL externa dinámica
+install(
+    FILES "${THIRDPARTY_DIR}/mpv/libmpv-2.dll"
     DESTINATION .
 )
 
-# -----------------------------------------------------------------------------
-# Compilar Script de Python a Ejecutable (PyInstaller)
-# -----------------------------------------------------------------------------
+# =============================================================================
+# PYTHON / PYINSTALLER
+# =============================================================================
 
 find_program(PYINSTALLER_EXECUTABLE pyinstaller)
 
 if(PYINSTALLER_EXECUTABLE)
     set(PYTHON_SCRIPT "${CMAKE_CURRENT_SOURCE_DIR}/src/iptvplus/main.py")
     set(PY_OUTPUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/py_build")
-    set(PY_EXE_NAME "scrap")
+    set(PY_EXE_NAME scrap)
     set(PY_TARGET_EXE "${PY_OUTPUT_DIR}/dist/${PY_EXE_NAME}.exe")
 
-    # Comando de compilación personalizada
     add_custom_command(
         OUTPUT "${PY_TARGET_EXE}"
         COMMAND "${PYINSTALLER_EXECUTABLE}"
-                --noconfirm
-                --onefile
-                --name "${PY_EXE_NAME}"
-                --paths "${CMAKE_CURRENT_SOURCE_DIR}/src/iptvplus"
-                --exclude-module "urllib3.contrib.emscripten"
-                --distpath "${PY_OUTPUT_DIR}/dist"
-                --workpath "${PY_OUTPUT_DIR}/build"
-                --specpath "${PY_OUTPUT_DIR}"
-                "${PYTHON_SCRIPT}"
+            --noconfirm
+            --onefile
+            --name "${PY_EXE_NAME}"
+            --paths "${CMAKE_CURRENT_SOURCE_DIR}/src/iptvplus"
+            --exclude-module urllib3.contrib.emscripten
+            --distpath "${PY_OUTPUT_DIR}/dist"
+            --workpath "${PY_OUTPUT_DIR}/build"
+            --specpath "${PY_OUTPUT_DIR}"
+            "${PYTHON_SCRIPT}"
         DEPENDS "${PYTHON_SCRIPT}"
-        COMMENT "Compilando script de Python con PyInstaller..."
+        COMMENT "Compilando scraper Python con PyInstaller..."
         VERBATIM
     )
 
-    # Crear objetivo dentro de MSBuild / Visual Studio
-    add_custom_target(build_python_helper ALL
+    add_custom_target(
+        build_python_helper
+        ALL
         DEPENDS "${PY_TARGET_EXE}"
     )
 
     add_dependencies(${PROJECT_NAME} build_python_helper)
 
-    # Regla de instalación para CPack / NSIS
-    install(FILES
-        "${PY_TARGET_EXE}"
-        DESTINATION .
-    )
+    install(FILES "${PY_TARGET_EXE}" DESTINATION .)
 endif()
 
-# -----------------------------------------------------------------------------
-# Qt / windeployqt
-# -----------------------------------------------------------------------------
+# =============================================================================
+# QT DEPLOYMENT
+# =============================================================================
 
 find_program(WINDEPLOYQT_EXECUTABLE windeployqt)
 
 if(WINDEPLOYQT_EXECUTABLE)
-    install(CODE "
+    install(
+        CODE
+        "
         execute_process(
-            COMMAND \"${WINDEPLOYQT_EXECUTABLE}\"
-                    --release
-                    --no-translations
-                    \"\${CMAKE_INSTALL_PREFIX}/${PROJECT_NAME}.exe\"
+            COMMAND
+                \"${WINDEPLOYQT_EXECUTABLE}\"
+                --release
+                --no-translations
+                \"\${CMAKE_INSTALL_PREFIX}/${PROJECT_NAME}.exe\"
         )
-    ")
+        "
+    )
 endif()
 
-# -----------------------------------------------------------------------------
-# REDIST
-# -----------------------------------------------------------------------------
+# =============================================================================
+# REDISTRIBUTABLES
+# =============================================================================
 
 set(REDIST_DIR "${CMAKE_CURRENT_SOURCE_DIR}/_redist")
 
-install(FILES
-    "${REDIST_DIR}/vcredist_v14.x64.exe"
-    "${REDIST_DIR}/vcredist_v14.x86.exe"
-    "${REDIST_DIR}/VulkanRT-Installer.exe"
+install(
+    FILES
+        "${REDIST_DIR}/vcredist_v14.x64.exe"
+        "${REDIST_DIR}/vcredist_v14.x86.exe"
+        "${REDIST_DIR}/VulkanRT-Installer.exe"
     DESTINATION "_redist"
 )
 
-# -----------------------------------------------------------------------------
+# =============================================================================
 # CPACK
-# -----------------------------------------------------------------------------
+# =============================================================================
 
 set(CPACK_NSIS_MUI_ICON "${CMAKE_CURRENT_SOURCE_DIR}/iptv-icon.ico")
 set(CPACK_NSIS_MUI_UNIICON "${CMAKE_CURRENT_SOURCE_DIR}/iptv-icon.ico")
@@ -198,24 +245,40 @@ set(CPACK_PACKAGE_VENDOR "@RgeditV1")
 set(CPACK_NSIS_DISPLAY_NAME "iptvPlus")
 set(CPACK_NSIS_HELP_LINK "rgeditv1@protonmail.com")
 set(CPACK_NSIS_URL_INFO_ABOUT "https://github.com/RgeditV1/iptvPlus")
-
 set(CPACK_GENERATOR "NSIS;ZIP")
 
-set(CPACK_NSIS_CREATE_ICONS_EXTRA "
-    CreateShortCut '$SMPROGRAMS\\\\$STARTMENU_FOLDER\\\\iptvPlus.lnk' '$INSTDIR\\\\iptvPlus.exe'
-")
+# =============================================================================
+# START MENU
+# =============================================================================
 
-set(CPACK_NSIS_DELETE_ICONS_EXTRA "
-    Delete '$SMPROGRAMS\\\\$START_MENU\\\\iptvPlus.lnk'
-")
+set(CPACK_NSIS_CREATE_ICONS_EXTRA
+    "
+    CreateShortCut
+        '$SMPROGRAMS\\$STARTMENU_FOLDER\\iptvPlus.lnk'
+        '$INSTDIR\\iptvPlus.exe'
+    "
+)
+
+set(CPACK_NSIS_DELETE_ICONS_EXTRA
+    "
+    Delete
+        '$SMPROGRAMS\\$START_MENU\\iptvPlus.lnk'
+    "
+)
 
 set(CPACK_NSIS_MODIFY_PATH ON)
 set(CPACK_NSIS_MUI_FINISHPAGE_RUN "iptvPlus.exe")
 
-set(CPACK_NSIS_EXTRA_INSTALL_COMMANDS "
-    ExecWait '\\\"\\$INSTDIR\\\\_redist\\\\vcredist_v14.x64.exe\\\" /S'
-    ExecWait '\\\"\\$INSTDIR\\\\_redist\\\\vcredist_v14.x86.exe\\\" /S'
-    ExecWait '\\\"\\$INSTDIR\\\\_redist\\\\VulkanRT-Installer.exe\\\" /S'
-")
+# =============================================================================
+# REDIST INSTALL
+# =============================================================================
+
+set(CPACK_NSIS_EXTRA_INSTALL_COMMANDS
+    "
+    ExecWait '\"\$INSTDIR\\_redist\\vcredist_v14.x64.exe\" /S'
+    ExecWait '\"\$INSTDIR\\_redist\\vcredist_v14.x86.exe\" /S'
+    ExecWait '\"\$INSTDIR\\_redist\\VulkanRT-Installer.exe\" /S'
+    "
+)
 
 include(CPack)
