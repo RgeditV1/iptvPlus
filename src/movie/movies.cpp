@@ -3,33 +3,12 @@
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QCoreApplication>
+#include <QNetworkReply>
 #include <QFileInfo>
 #include <QDir>
 #include <QPixmap>
 #include <QMouseEvent>
 #include <QDebug>
-
-class MovieCardWidget : public QWidget {
-public:
-    MovieCardWidget(const MovieItem& movie, QWidget* parent = nullptr) 
-        : QWidget(parent), m_movie(movie) {}
-
-    const MovieItem& movie() const { return m_movie; }
-
-protected:
-    void mousePressEvent(QMouseEvent* event) override {
-        if (event->button() == Qt::LeftButton) {
-            emit clicked(m_movie);
-        }
-        QWidget::mousePressEvent(event);
-    }
-
-signals:
-    void clicked(const MovieItem& movie);
-
-private:
-    MovieItem m_movie;
-};
 
 MoviesWidget::MoviesWidget(QWidget* parent)
     : QWidget(parent)
@@ -167,9 +146,6 @@ void MoviesWidget::onSearchClicked()
          << "--limit" << "20"
          << "--save";
 
-    qDebug() << "[MoviesWidget] Ejecutando:" << scrapPath << args;
-
-    // Conectar captura de errores directos del sistema operativo
     connect(m_scrapProcess, &QProcess::errorOccurred, this, [this](QProcess::ProcessError error) {
         qWarning() << "[MoviesWidget] Error al ejecutar scrap.exe:" << error;
         m_loadingBar->hide();
@@ -189,7 +165,6 @@ void MoviesWidget::onScrapFinished(int exitCode, QProcess::ExitStatus exitStatus
     m_loadingBar->hide();
     m_searchButton->setEnabled(true);
 
-    // Recargar las películas de SQLite una vez finalizado el scraping
     loadMoviesFromDatabase();
 }
 
@@ -204,10 +179,7 @@ void MoviesWidget::loadMoviesFromDatabase()
         delete child;
     }
 
-    // Cargar como máximo 20 películas
     const auto movies = DatabaseManager::instance().getSavedMovies(20, 0);
-
-    qDebug() << "[MoviesWidget] Películas cargadas desde SQLite:" << movies.size();
 
     int columns = 5;
     int row = 0;
@@ -240,6 +212,10 @@ QWidget* MoviesWidget::createMovieCard(const MovieItem& movie)
         "}"
     );
 
+    // Guardar la información del MovieItem en la propiedad dinámica del QWidget
+    card->setProperty("movieData", QVariant::fromValue(movie));
+    card->installEventFilter(this);
+
     QVBoxLayout* cardLayout = new QVBoxLayout(card);
     cardLayout->setContentsMargins(8, 8, 8, 8);
     cardLayout->setSpacing(6);
@@ -270,6 +246,22 @@ QWidget* MoviesWidget::createMovieCard(const MovieItem& movie)
     return card;
 }
 
+bool MoviesWidget::eventFilter(QObject* watched, QEvent* event)
+{
+    if (event->type() == QEvent::MouseButtonPress) {
+        auto* mouseEvent = static_cast<QMouseEvent*>(event);
+        if (mouseEvent->button() == Qt::LeftButton) {
+            auto* widget = qobject_cast<QWidget*>(watched);
+            if (widget && widget->property("movieData").isValid()) {
+                MovieItem movie = widget->property("movieData").value<MovieItem>();
+                emit movieSelected(movie);
+                return true;
+            }
+        }
+    }
+    return QWidget::eventFilter(watched, event);
+}
+
 void MoviesWidget::downloadPoster(const QString& url, QLabel* imageLabel)
 {
     if (url.isEmpty()) return;
@@ -287,7 +279,6 @@ void MoviesWidget::downloadPoster(const QString& url, QLabel* imageLabel)
                 imageLabel->setText("Sin Imagen");
             }
         } else {
-            qWarning() << "[MoviesWidget] Error descargando poster:" << reply->errorString();
             imageLabel->setText("Error Poster");
         }
         reply->deleteLater();

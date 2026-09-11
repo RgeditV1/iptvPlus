@@ -358,6 +358,24 @@ bool MpvPlayer::initialize(WId wid)
         "yes"
     );
 
+    mpv_set_option_string(
+        m_mpv,
+        "cache",
+        "yes"
+    );
+
+    mpv_set_option_string(
+        m_mpv,
+        "demuxer-max-bytes",
+        "32MiB"
+    );
+
+    mpv_set_option_string(
+        m_mpv,
+        "demuxer-readahead-secs",
+        "10"
+    );
+
     const QByteArray widString =
         QByteArray::number(
             static_cast<quintptr>(wid)
