@@ -1,5 +1,7 @@
 #pragma once
 
+#include "moviedetail.hpp"
+
 #include <QMainWindow>
 #include <QPushButton>
 #include <QTreeWidget>
@@ -8,6 +10,7 @@
 #include <QEvent>
 
 class TvWidget;
+class MoviesWidget;
 
 class MainWindow : public QMainWindow
 {
@@ -33,7 +36,8 @@ private:
     QStackedWidget* m_stackedWidget = nullptr;
 
     // Vistas principales
-    QWidget* m_moviesView = nullptr;
+    MoviesWidget* m_moviesView = nullptr;
+    MovieDetailWidget* m_movieDetailView = nullptr;
     TvWidget* m_tvView = nullptr;
 
     // Sidebar Widgets

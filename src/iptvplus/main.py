@@ -159,12 +159,8 @@ def main():
             tmdb_id=movie.get("id"),
             year=movie.get("year")
         )
+        
         movie["streams"] = details.get("streams", [])
-
-        if movie["streams"]:
-            print("   Fuentes / Torrents:")
-            for st in movie["streams"]:
-                print(f"     - [{st.get('server')}]: {st.get('url')}")
 
         if args.save:
             save_movie(movie)

@@ -20,7 +20,7 @@ VideoPlayerWindow::VideoPlayerWindow(QWidget* parent)
 
     setupUi();
 
-    m_player = new MpvPlayer();
+    m_player = new MpvPlayer(this);
 
     m_controlsHideTimer = new QTimer(this);
 
@@ -43,11 +43,7 @@ VideoPlayerWindow::VideoPlayerWindow(QWidget* parent)
     initializePlayer();
 }
 
-VideoPlayerWindow::~VideoPlayerWindow()
-{
-    delete m_player;
-    m_player = nullptr;
-}
+VideoPlayerWindow::~VideoPlayerWindow() = default;
 
 bool VideoPlayerWindow::initializePlayer()
 {

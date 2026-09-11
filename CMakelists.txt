@@ -79,6 +79,8 @@ set(PROJECT_SOURCES
 
     # Movies
     src/movie/movies.cpp
+    src/movie/moviedetail.cpp
+    include/movie/moviedetail.hpp
     include/movie/movies.hpp
 
     # Resources

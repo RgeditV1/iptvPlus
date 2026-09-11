@@ -9,9 +9,12 @@
 #include <QLabel>
 #include <QProcess>
 #include <QNetworkAccessManager>
-#include <QNetworkReply>
+#include <QEvent>
 
 #include "databasemanager.hpp"
+
+// Permite empaquetar MovieItem dentro de QVariant para el eventFilter
+Q_DECLARE_METATYPE(MovieItem)
 
 class MoviesWidget : public QWidget
 {
@@ -19,12 +22,15 @@ class MoviesWidget : public QWidget
 
 public:
     explicit MoviesWidget(QWidget* parent = nullptr);
-    ~MoviesWidget();
+    ~MoviesWidget() override;
 
     void loadMoviesFromDatabase();
 
 signals:
     void movieSelected(const MovieItem& movie);
+
+protected:
+    bool eventFilter(QObject* watched, QEvent* event) override;
 
 private slots:
     void onSearchClicked();

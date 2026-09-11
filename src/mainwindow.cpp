@@ -1,5 +1,5 @@
-#include "mainwindow.hpp"
 #include "videoplayerwindow.hpp"
+#include "mainwindow.hpp"
 #include "movies.hpp"
 #include "tv.hpp"
 
@@ -66,12 +66,26 @@ void MainWindow::setupUi()
     // Vista Películas
     m_moviesView = new MoviesWidget(this);
 
+    // Detalles de Pelicula
+    m_movieDetailView = new MovieDetailWidget(this);
+
     // Vista TV integrada con reproductor y barra lateral de canales
     m_tvView = new TvWidget(this);
 
     // Añadir vistas al StackedWidget
-    m_stackedWidget->addWidget(m_tvView);     // Índice 0: TV
-    m_stackedWidget->addWidget(m_moviesView); // Índice 1: Películas
+    m_stackedWidget->addWidget(m_tvView);
+    m_stackedWidget->addWidget(m_moviesView);
+    m_stackedWidget->addWidget(m_movieDetailView);
+
+
+    connect(m_moviesView, &MoviesWidget::movieSelected, this, [this](const MovieItem& movie) {
+        m_movieDetailView->setMovie(movie);
+        m_stackedWidget->setCurrentWidget(m_movieDetailView);
+    });
+
+    connect(m_movieDetailView, &MovieDetailWidget::backRequested, this, [this]() {
+        m_stackedWidget->setCurrentWidget(m_moviesView);
+    });
 
     connect(m_stackedWidget, &QStackedWidget::currentChanged, this, [this](int newIndex) {
         if (newIndex != 0 && m_tvView && m_tvView->player()) {
