@@ -1,0 +1,216 @@
+name: Build MacOS
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+  pull_request:
+
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+  jobs:
+    build-macos:
+      runs-on: macos-latest
+
+      steps:
+        # ============================================================
+        # Checkout
+        # ============================================================
+
+        - name: Checkout
+          uses: actions/checkout@v4
+
+        # ============================================================
+        # Python
+        # ============================================================
+
+        - name: Setup Python
+          uses: actions/setup-python@v6
+          with:
+            python-version: "3.12"
+
+        # ============================================================
+        # System Dependencies
+        # ============================================================
+
+        - name: Install System Dependencies
+          run: |
+            brew install sevenzip
+
+        # ============================================================
+        # C++ Dependencies
+        # ============================================================
+
+        - name: Install vcpkg Dependencies
+          run: |
+            brew install libtorrent openssl boost
+
+        # ============================================================
+        # Install libmpv
+        # ============================================================
+
+        - name: Install libmpv
+          run: |
+            brew install mpv
+
+        # ============================================================
+        # Cache Qt
+        # ============================================================
+
+        - name: Cache Qt
+          id: cache-qt
+          uses: actions/cache@v4
+          with:
+            path: ${{ github.workspace }}/Qt
+            key: qt-6.11.2-macos-clang-x64
+
+        # ============================================================
+        # Install Qt w/ aqtinstall
+        # ============================================================
+
+        - name: Install Qt w/ aqtinstall
+          if: steps.cache-qt.outputs.cache-hit != 'true'
+          run: |
+            python3 -m pip install --upgrade pip
+
+            pip3 install git+https://github.com/miurahr/aqtinstall.git@refs/pull/1000/head
+
+            aqt install-qt mac desktop 6.11.2 mac
+
+        # ============================================================
+        # Locate Qt6Config.cmake
+        # ============================================================
+
+        - name: Locate Qt6
+          run: |
+            QT_DIR="${{ github.workspace }}/Qt"
+            echo "Buscando Qt6Config.cmake en $QT_DIR..."
+
+            # Find the directory containing Qt6Config.cmake
+            QT6_CMAKE_DIR=$(find "$QT_DIR" -name "Qt6Config.cmake" -exec dirname {} \; | head -n 1)
+
+            if [ -z "$QT6_CMAKE_DIR" ]; then
+              echo "::error::No se encontró Qt6Config.cmake"
+              exit 1
+            fi
+
+            echo "Qt6 encontrado en: $QT6_CMAKE_DIR"
+            echo "QT6_DIR=$QT6_CMAKE_DIR" >> $GITHUB_ENV
+
+        # ============================================================
+        # Qt Verification
+        # ============================================================
+
+        - name: Verify Qt
+          run: |
+            echo "QT6_DIR: $QT6_DIR"
+
+            if [ ! -f "$QT6_DIR/Qt6Config.cmake" ]; then
+              echo "::error::Qt6Config.cmake no existe."
+              exit 1
+            fi
+
+            echo "Qt6Config.cmake encontrado correctamente."
+
+        # ============================================================
+        # Verify Build Environment
+        # ============================================================
+
+        - name: Verify Build Environment
+          run: |
+            echo "========================================"
+            echo "Build Environment"
+            echo "========================================"
+
+            echo ""
+            echo "CMake:"
+            cmake --version
+
+            echo ""
+            echo "Clang"
+            clang --version
+
+        # ============================================================
+        # CMake Configruration
+        # ============================================================
+
+        - name: Configure CMake
+          run: |
+            echo "========================================"
+            echo "Configurando CMake"
+            echo "========================================"
+
+            cmake -S . -B build \
+              "-DQt6_DIR=$QT6_DIR" \
+              "-DCMAKE_INSTALL_PREFIX=build/install" \
+              "-DCMAKE_PREFIX_PATH=$(brew --prefix)"
+
+        # ============================================================
+        # Build
+        # ============================================================
+
+        - name: Build Release
+          run: |
+            echo "========================================"
+            echo "Compilando Release"
+            echo "========================================"
+
+            cmake --build build \
+              --config Release \
+              --parallel
+
+        # ============================================================
+        # Install
+        # ============================================================
+
+        - name: Install Release
+          run: |
+            echo "========================================"
+            echo "Instalando Release"
+            echo "========================================"
+
+            cmake --install build --config Release
+
+        # ============================================================
+        # CPack
+        # ============================================================
+
+        - name: Package w/ CPack
+          run: |
+            echo "========================================"
+            echo "Generando paquetes"
+            echo "========================================"
+
+            cpack \
+            --config "${{ github.workspace }}/build/CPackConfig.cmake" \
+            -C Release
+
+        # ============================================================
+        # Upload Artifacts
+        # ============================================================
+
+        - name: Upload Artifacts
+          uses: actions/upload-artifact@v4
+          with:
+            name: iptvPlus-macOS
+            path: build/*.dmg
+
+        # ============================================================
+        # Create Github Release (Runs only on tag pushes like 1.0.0)
+        # ============================================================
+
+        - name: Create Github Release
+          if: startsWith(github.ref, 'refs/tags/')
+          uses: softprops/action-gh-release@v2
+          with:
+            generate_release_notes: true
+            files: |
+              build/*.dmg
+              build/*.zip
+            env:
+              GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
