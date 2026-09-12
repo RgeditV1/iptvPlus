@@ -1,10 +1,13 @@
-## [0.1.3] - 2026-09-3
+## [0.2] - 2026-09-11
+
+### Cambio
+
+- Rework de la GUI completa y reestructuracion del programa
+- seccion de pelicula y busqueda añadida
+- Titulo de la ventana principal
 
 ### Añadido
 - Icono de Aplicacion
-
-### Cambio
-- Titulo de la ventana principal
 
 ## [0.1.2] - 2026-09-1
 
