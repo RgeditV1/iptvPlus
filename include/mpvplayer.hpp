@@ -7,6 +7,14 @@
 
 struct mpv_handle;
 
+struct TrackInfo {
+    int id = -1;
+    QString type;    // "audio" o "sub"
+    QString title;
+    QString lang;
+    bool selected = false;
+};
+
 class MpvPlayer : public QObject
 {
     Q_OBJECT
@@ -35,6 +43,10 @@ public:
     double duration() const;
     bool isLive() const; // pelicula o envivo
 
+    QList<TrackInfo> availableTracks() const;
+    void setAudioTrack(int trackId);
+    void setSubtitleTrack(int trackId); // Usar -1 o 0 ("no") para desactivar subtítulos
+
 signals:
     void positionChanged(double position);
     void durationChanged(double duration);
@@ -45,6 +57,7 @@ signals:
 
     void playbackStarted();
     void playbackFinished();
+    void tracksChanged();
 
     void playbackError(const QString& error);
 

@@ -18,5 +18,7 @@
         <file>resources/icons/stop-circle.svg</file>
         <file>iptv-icon.png</file>
         <file>resources/icons/film.svg</file>
+        <file>resources/icons/headphones.svg</file>
+        <file>resources/icons/message-square.svg</file>
     </qresource>
 </RCC>

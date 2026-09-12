@@ -20,6 +20,7 @@ public:
     ~TvWidget() override;
 
     VideoPlayerWindow* player() const { return m_player; }
+    VideoPlayerWindow* videoPlayerWindow() const { return m_player; }
 
 protected:
     bool eventFilter(QObject* watched, QEvent* event) override;

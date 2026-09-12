@@ -91,6 +91,10 @@ void MainWindow::setupUi()
         if (newIndex != 0 && m_tvView && m_tvView->player()) {
             m_tvView->player()->pause();
         }
+        
+        if (m_tvView && m_tvView->videoPlayerWindow()) {
+            m_tvView->videoPlayerWindow()->setTrackControlsVisible(true);
+        }
     });
 
     mainContainerLayout->addWidget(m_stackedWidget, 1);

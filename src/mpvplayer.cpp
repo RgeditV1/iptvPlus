@@ -70,6 +70,10 @@ void MpvPlayer::handleEvent(mpv_event* event)
         if (!property->name)
             break;
 
+        if (qstrcmp(property->name, "track-list") == 0) {
+            emit tracksChanged();
+        }
+
         if (qstrcmp(property->name, "time-pos") == 0) {
 
             if (property->format == MPV_FORMAT_DOUBLE &&
@@ -276,6 +280,18 @@ void MpvPlayer::observeProperties()
     mpv_command(
         m_mpv,
         command6
+    );
+
+    const char* command7[] = {
+        "observe_property",
+        "7",
+        "track-list",
+        nullptr
+    };
+
+    mpv_command(
+        m_mpv,
+        command7
     );
 }
 
@@ -750,6 +766,78 @@ double MpvPlayer::duration() const
         return 0.0;
 
     return value;
+}
+
+QList<TrackInfo> MpvPlayer::availableTracks() const
+{
+    QList<TrackInfo> tracks;
+    if (!m_mpv)
+        return tracks;
+
+    mpv_node node;
+    if (mpv_get_property(m_mpv, "track-list", MPV_FORMAT_NODE, &node) < 0)
+        return tracks;
+
+    if (node.format == MPV_FORMAT_NODE_ARRAY) {
+        mpv_node_list* list = node.u.list;
+        for (int i = 0; i < list->num; ++i) {
+            if (list->values[i].format != MPV_FORMAT_NODE_MAP)
+                continue;
+
+            mpv_node_list* map = list->values[i].u.list;
+            TrackInfo info;
+
+            for (int j = 0; j < map->num; ++j) {
+                QString key = QString::fromUtf8(map->keys[j]);
+                mpv_node* val = &map->values[j];
+
+                if (key == "id" && val->format == MPV_FORMAT_INT64) {
+                    info.id = static_cast<int>(val->u.int64);
+                } else if (key == "type" && val->format == MPV_FORMAT_STRING) {
+                    info.type = QString::fromUtf8(val->u.string);
+                } else if (key == "title" && val->format == MPV_FORMAT_STRING) {
+                    info.title = QString::fromUtf8(val->u.string);
+                } else if (key == "lang" && val->format == MPV_FORMAT_STRING) {
+                    info.lang = QString::fromUtf8(val->u.string);
+                } else if (key == "selected" && val->format == MPV_FORMAT_FLAG) {
+                    info.selected = (val->u.flag != 0);
+                }
+            }
+
+            if (info.type == "audio" || info.type == "sub") {
+                tracks.append(info);
+            }
+        }
+    }
+
+    mpv_free_node_contents(&node);
+    return tracks;
+}
+
+void MpvPlayer::setAudioTrack(int trackId)
+{
+    if (!m_mpv)
+        return;
+
+    const QByteArray idStr = (trackId <= 0) 
+        ? QByteArray("no") 
+        : QByteArray::number(trackId);
+
+    const char* command[] = { "set", "aid", idStr.constData(), nullptr };
+    mpv_command(m_mpv, command);
+}
+
+void MpvPlayer::setSubtitleTrack(int trackId)
+{
+    if (!m_mpv)
+        return;
+
+    const QByteArray idStr = (trackId <= 0) 
+        ? QByteArray("no") 
+        : QByteArray::number(trackId);
+
+    const char* command[] = { "set", "sid", idStr.constData(), nullptr };
+    mpv_command(m_mpv, command);
 }
 
 bool MpvPlayer::isLive() const

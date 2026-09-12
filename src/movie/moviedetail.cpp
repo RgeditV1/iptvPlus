@@ -335,6 +335,8 @@ void MovieDetailWidget::onTorrentReadyToPlay()
 
     m_playButton->setEnabled(false);
     m_playButton->setText("Reproduciendo...");
+
+    m_videoPlayer->setTrackControlsVisible(true);
     
     m_videoPlayer->play(videoPath);
 }

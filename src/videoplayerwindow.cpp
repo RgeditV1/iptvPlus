@@ -8,14 +8,13 @@
 #include <QSlider>
 #include <QIcon>
 #include <QVBoxLayout>
+#include <QMenu>
 
 VideoPlayerWindow::VideoPlayerWindow(QWidget* parent)
     : QWidget(parent)
 {
     setWindowTitle("IPTV++");
-
     resize(1280, 720);
-
     setMouseTracking(true);
 
     setupUi();
@@ -23,20 +22,13 @@ VideoPlayerWindow::VideoPlayerWindow(QWidget* parent)
     m_player = new MpvPlayer(this);
 
     m_controlsHideTimer = new QTimer(this);
-
     m_controlsHideTimer->setSingleShot(true);
 
-    connect(
-        m_controlsHideTimer,
-        &QTimer::timeout,
-        this,
-        [this]()
-        {
-            if (m_isFullscreen) {
-                m_controlsWidget->hide();
-            }
+    connect(m_controlsHideTimer, &QTimer::timeout, this, [this]() {
+        if (m_isFullscreen) {
+            m_controlsWidget->hide();
         }
-    );
+    });
 
     setupConnections();
 
@@ -296,6 +288,22 @@ void VideoPlayerWindow::setupUi()
     m_volumeButton->installEventFilter(this);
     m_volumeSlider->installEventFilter(this);
 
+    // Botón de Audio
+    m_audioButton = new QPushButton(this);
+    m_audioButton->setIcon(QIcon(":/resources/icons/headphones.svg")); 
+    m_audioButton->setToolTip("Pistas de Audio");
+
+    m_audioMenu = new QMenu(this);
+    m_audioButton->setMenu(m_audioMenu);
+
+    // Botón de Subtítulos
+    m_subtitlesButton = new QPushButton(this);
+    m_subtitlesButton->setIcon(QIcon(":/resources/icons/message-square.svg"));
+    m_subtitlesButton->setToolTip("Subtítulos");
+
+    m_subtitlesMenu = new QMenu(this);
+    m_subtitlesButton->setMenu(m_subtitlesMenu);
+
     m_fullscreenButton = new QPushButton(this);
     m_fullscreenButton->setIcon(
         QIcon(":/resources/icons/maximize.svg")
@@ -322,6 +330,14 @@ void VideoPlayerWindow::setupUi()
     );
 
     m_controlsLayout->addWidget(
+        m_audioButton
+    );
+
+    m_controlsLayout->addWidget(
+        m_subtitlesButton
+    );
+
+    m_controlsLayout->addWidget(
         m_durationLabel
     );
 
@@ -338,6 +354,25 @@ void VideoPlayerWindow::setupUi()
 
 void VideoPlayerWindow::setupConnections()
 {
+    connect(m_audioButton, &QPushButton::clicked, this, [this]() {
+        if (m_audioMenu && !m_audioMenu->isEmpty()) {
+            m_audioMenu->exec(m_audioButton->mapToGlobal(QPoint(0, -m_audioMenu->sizeHint().height())));
+        }
+    });
+
+    connect(m_subtitlesButton, &QPushButton::clicked, this, [this]() {
+        if (m_subtitlesMenu && !m_subtitlesMenu->isEmpty()) {
+            m_subtitlesMenu->exec(m_subtitlesButton->mapToGlobal(QPoint(0, -m_subtitlesMenu->sizeHint().height())));
+        }
+    });
+
+    connect(
+        m_player,
+        &MpvPlayer::tracksChanged,
+        this,
+        &VideoPlayerWindow::updateTrackMenus
+    );
+
     connect(
         m_player,
         &MpvPlayer::bufferingChanged,
@@ -486,6 +521,63 @@ bool VideoPlayerWindow::eventFilter(QObject* watched, QEvent* event)
     return QWidget::eventFilter(watched, event);
 }
 
+void VideoPlayerWindow::setTrackControlsVisible(bool visible)
+{
+    if (m_audioButton)
+        m_audioButton->setVisible(visible);
+
+    if (m_subtitlesButton)
+        m_subtitlesButton->setVisible(visible);
+}
+
+void VideoPlayerWindow::updateTrackMenus()
+{
+    if (!m_player)
+        return;
+
+    m_audioMenu->clear();
+    m_subtitlesMenu->clear();
+
+    const QList<TrackInfo> tracks = m_player->availableTracks();
+
+    // Opción para desactivar subtítulos
+    QAction* disableSubAction = m_subtitlesMenu->addAction("Desactivados");
+    disableSubAction->setCheckable(true);
+    connect(disableSubAction, &QAction::triggered, this, [this]() {
+        m_player->setSubtitleTrack(0);
+    });
+
+    bool anySubSelected = false;
+
+    for (const TrackInfo& track : tracks) {
+        QString label = QString("[%1] %2").arg(
+            track.lang.isEmpty() ? "und" : track.lang.toUpper(),
+            track.title.isEmpty() ? (track.type == "audio" ? "Audio" : "Subtítulo") : track.title
+        );
+
+        if (track.type == "audio") {
+            QAction* action = m_audioMenu->addAction(label);
+            action->setCheckable(true);
+            action->setChecked(track.selected);
+            connect(action, &QAction::triggered, this, [this, track]() {
+                m_player->setAudioTrack(track.id);
+            });
+        } else if (track.type == "sub") {
+            QAction* action = m_subtitlesMenu->addAction(label);
+            action->setCheckable(true);
+            action->setChecked(track.selected);
+            if (track.selected)
+                anySubSelected = true;
+
+            connect(action, &QAction::triggered, this, [this, track]() {
+                m_player->setSubtitleTrack(track.id);
+            });
+        }
+    }
+
+    disableSubAction->setChecked(!anySubSelected);
+}
+
 void VideoPlayerWindow::resetControlsHideTimer()
 {
     if (!m_isFullscreen)
@@ -520,6 +612,8 @@ void VideoPlayerWindow::play(const QString& url)
     m_playButton->setIcon(
         QIcon(":/resources/icons/pause.svg")
     );
+
+    QTimer::singleShot(1000, this, &VideoPlayerWindow::updateTrackMenus);
 }
 
 void VideoPlayerWindow::pause()

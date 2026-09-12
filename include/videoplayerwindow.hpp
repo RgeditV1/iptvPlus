@@ -11,6 +11,7 @@ class QSlider;
 class QLabel;
 class QVBoxLayout;
 class QHBoxLayout;
+class QMenu;
 
 class MpvPlayer;
 
@@ -27,6 +28,10 @@ public:
     void play(const QString& url);
     void pause();
     void stop();
+
+    void setTrackControlsVisible(bool visible);
+
+    MpvPlayer* player() const { return m_player; }
 
 protected:
     void mouseMoveEvent(QMouseEvent* event) override;
@@ -49,19 +54,24 @@ private:
     void updateVolumeIcon(double volume);
 
     void resetControlsHideTimer();
+    void updateTrackMenus();
 
 private:
     MpvPlayer* m_player = nullptr;
 
-    // Área donde libmpv renderizará el vídeo
     QWidget* m_videoWidget = nullptr;
     QWidget* m_controlsWidget = nullptr;
 
-    // Controles
+    // Controles base
     QPushButton* m_playButton = nullptr;
     QPushButton* m_stopButton = nullptr;
     QPushButton* m_fullscreenButton = nullptr;
     QPushButton* m_volumeButton = nullptr;
+
+    QPushButton* m_audioButton = nullptr;
+    QPushButton* m_subtitlesButton = nullptr;
+    QMenu* m_audioMenu = nullptr;
+    QMenu* m_subtitlesMenu = nullptr;
 
     QTimer* m_controlsHideTimer = nullptr;
 
