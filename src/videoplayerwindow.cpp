@@ -132,7 +132,11 @@ void VideoPlayerWindow::setupUi()
     );
 
     m_videoWidget->setStyleSheet(
-        "background-color: black;"
+        "QWidget {"
+        "   background-color: black;"
+        "   border: 2px solid #89b4fa;"
+        "   border-radius: 8px;"
+        "}"
     );
 
     m_videoWidget->setMouseTracking(true);
@@ -262,6 +266,35 @@ void VideoPlayerWindow::setupUi()
     m_volumeSlider->setRange(0, 100);
     m_volumeSlider->setValue(100);
     m_volumeSlider->setFixedWidth(100);
+    m_volumeSlider->setMouseTracking(true);
+    m_volumeSlider->hide();
+
+    m_volumeSlider->setStyleSheet(
+        "QSlider::groove:horizontal {"
+        "   border: none;"
+        "   height: 4px;"
+        "   background: #45475a;"
+        "   border-radius: 2px;"
+        "}"
+        "QSlider::sub-page:horizontal {"
+        "   background: #89b4fa;"
+        "   border-radius: 2px;"
+        "}"
+        "QSlider::handle:horizontal {"
+        "   background: #cdd6f4;"
+        "   border: none;"
+        "   width: 12px;"
+        "   height: 12px;"
+        "   margin: -4px 0;"
+        "   border-radius: 6px;"
+        "}"
+        "QSlider::handle:horizontal:hover {"
+        "   background: #ffffff;"
+        "}"
+    );
+
+    m_volumeButton->installEventFilter(this);
+    m_volumeSlider->installEventFilter(this);
 
     m_fullscreenButton = new QPushButton(this);
     m_fullscreenButton->setIcon(
@@ -428,6 +461,28 @@ bool VideoPlayerWindow::eventFilter(QObject* watched, QEvent* event)
     if (m_isFullscreen && event->type() == QEvent::MouseMove) {
         resetControlsHideTimer();
     }
+
+    // Desplegar el slider de volumen al pasar el ratón por el botón
+    if (watched == m_volumeButton) {
+        if (event->type() == QEvent::Enter) {
+            m_volumeSlider->show();
+        } else if (event->type() == QEvent::Leave) {
+            // Dar un pequeño retraso para permitir mover el ratón hacia el slider
+            QTimer::singleShot(200, this, [this]() {
+                if (!m_volumeButton->underMouse() && !m_volumeSlider->underMouse()) {
+                    m_volumeSlider->hide();
+                }
+            });
+        }
+    }
+
+    // Mantener visible mientras se esté interactuando con el slider
+    if (watched == m_volumeSlider && event->type() == QEvent::Leave) {
+        if (!m_volumeButton->underMouse()) {
+            m_volumeSlider->hide();
+        }
+    }
+
     return QWidget::eventFilter(watched, event);
 }
 
@@ -524,35 +579,33 @@ void VideoPlayerWindow::toggleMute()
     if (!m_player)
         return;
 
-    const bool muted =
-        m_player->isMuted();
+    const bool newMutedState = !m_player->isMuted();
+    m_player->setMuted(newMutedState);
 
-    m_player->setMuted(!muted);
+    if (newMutedState) {
+        m_volumeButton->setIcon(QIcon(":/resources/icons/volume-x.svg"));
+    } else {
+        updateVolumeIcon(m_player->volume());
+    }
 }
 
 void VideoPlayerWindow::toggleFullscreen()
 {
-    QWidget* topLevel = window(); // Obtener la ventana principal
-
     if (m_isFullscreen) {
         m_controlsHideTimer->stop();
         m_controlsWidget->show();
 
-        if (topLevel) {
-            topLevel->showNormal();
-        } else {
-            showNormal();
-        }
+        // Salir del modo pantalla completa devolviendo el widget a su estado normal dentro de la UI
+        setWindowFlags(Qt::Widget);
+        showNormal();
 
         m_isFullscreen = false;
         m_fullscreenButton->setIcon(QIcon(":/resources/icons/maximize.svg"));
 
     } else {
-        if (topLevel) {
-            topLevel->showFullScreen();
-        } else {
-            showFullScreen();
-        }
+        // Desvincular temporalmente del padre para tomar toda la pantalla
+        setWindowFlags(Qt::Window);
+        showFullScreen();
 
         m_isFullscreen = true;
         m_fullscreenButton->setIcon(QIcon(":/resources/icons/minimize.svg"));

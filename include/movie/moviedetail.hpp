@@ -7,6 +7,7 @@
 #include <QHBoxLayout>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
+#include <QComboBox>
 
 #include "databasemanager.hpp"
 #include "videoplayerwindow.hpp"
@@ -42,6 +43,7 @@ private:
     QLabel* m_metaLabel{nullptr};
     QLabel* m_descriptionLabel{nullptr};
     QPushButton* m_playButton{nullptr};
+    QComboBox* m_torrentSelector = nullptr;
     
     // Components
     VideoPlayerWindow* m_videoPlayer{nullptr};

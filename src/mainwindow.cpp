@@ -166,11 +166,27 @@ void MainWindow::toggleSidebar(bool show)
 
     m_sidebarVisible = show;
     m_sidebarAnimation->stop();
-    m_sidebarAnimation->setStartValue(m_sidebar->geometry());
 
-    int targetX = show ? 0 : -m_sidebarWidth;
-    m_sidebarAnimation->setEndValue(QRect(targetX, 0, m_sidebarWidth, height()));
+    if (show) {
+        m_sidebar->raise();
+        m_menuButton->raise(); // Elevar el botón para que quede sobre el sidebar si se superponen
+    }
+
+    int targetSidebarX = show ? 0 : -m_sidebarWidth;
+    int targetButtonX = show ? m_sidebarWidth + 10 : 10; // Posición original + margen
+
+    // Animar la barra lateral
+    m_sidebarAnimation->setStartValue(m_sidebar->geometry());
+    m_sidebarAnimation->setEndValue(QRect(targetSidebarX, 0, m_sidebarWidth, height()));
+
+    // Animar la posición del botón de menú en paralelo
+    QPropertyAnimation* buttonAnim = new QPropertyAnimation(m_menuButton, "pos", this);
+    buttonAnim->setDuration(200);
+    buttonAnim->setStartValue(m_menuButton->pos());
+    buttonAnim->setEndValue(QPoint(targetButtonX, m_menuButton->y()));
+
     m_sidebarAnimation->start();
+    buttonAnim->start(QAbstractAnimation::DeleteWhenStopped);
 }
 
 bool MainWindow::eventFilter(QObject* watched, QEvent* event)
@@ -195,4 +211,5 @@ void MainWindow::resizeEvent(QResizeEvent* event)
     QMainWindow::resizeEvent(event);
     int currentX = m_sidebarVisible ? 0 : -m_sidebarWidth;
     m_sidebar->setGeometry(currentX, 0, m_sidebarWidth, height());
+    m_sidebar->raise(); // Mantener arriba durante redimensionados
 }

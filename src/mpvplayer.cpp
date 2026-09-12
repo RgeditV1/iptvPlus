@@ -349,8 +349,13 @@ bool MpvPlayer::initialize(WId wid)
     mpv_set_option_string(
         m_mpv,
         "network-timeout",
-        "10"
+        "60"
     );
+
+    mpv_set_option_string(
+        m_mpv,
+        "stream-lavf-o",
+        "reconnect_delay_max=5");
 
     mpv_set_option_string(
         m_mpv,
@@ -367,13 +372,24 @@ bool MpvPlayer::initialize(WId wid)
     mpv_set_option_string(
         m_mpv,
         "demuxer-max-bytes",
-        "32MiB"
+        "150M"
     );
 
     mpv_set_option_string(
         m_mpv,
+        "--demuxer-max-back-bytes",
+        "50M"
+    );
+
+    mpv_set_option_string(
+        m_mpv,
+        "index",
+        "no");
+
+    mpv_set_option_string(
+        m_mpv,
         "demuxer-readahead-secs",
-        "10"
+        "60"
     );
 
     const QByteArray widString =

@@ -17,12 +17,31 @@ MovieDetailWidget::MovieDetailWidget(QWidget* parent)
 
     setupUi();
 
+    // Conexiones de las señales de TorrentEngine
     connect(m_torrentEngine, &TorrentEngine::readyToPlay, this, &MovieDetailWidget::onTorrentReadyToPlay);
     connect(m_torrentEngine, &TorrentEngine::errorOccurred, this, &MovieDetailWidget::onTorrentError);
+    connect(m_torrentEngine, &TorrentEngine::progressUpdated, this,
+            [this](float progress, int downloadRate, int numPeers) {
+                // Actualizar información en el botón solo mientras se está preparando/descargando antes de reproducir
+                if (!m_playButton->isEnabled() && m_playButton->text() != "Reproduciendo...") {
+                    double rateKb = downloadRate / 1024.0;
+                    QString rateStr = (rateKb >= 1024.0)
+                        ? QString::number(rateKb / 1024.0, 'f', 1) + " MB/s"
+                        : QString::number(rateKb, 'f', 0) + " KB/s";
+
+                    m_playButton->setText(
+                        QString("Cargando %1% (%2) [%3 peers]")
+                            .arg(progress, 0, 'f', 1)
+                            .arg(rateStr)
+                            .arg(numPeers)
+                    );
+                }
+            });
+
     connect(m_torrentEngine, &TorrentEngine::metadataLoaded, this,
             [this](const QString& fileName, qint64 fileSize) {
                 qDebug() << "[MovieDetailWidget] Vídeo encontrado:" << fileName << "tamaño:" << fileSize;
-                m_playButton->setText("Preparando...");
+                m_playButton->setText("Preparando piezas iniciales...");
             });
 }
 
@@ -106,9 +125,30 @@ void MovieDetailWidget::setupUi()
     m_descriptionLabel->setStyleSheet("color: #a6adc8; font-size: 13px;");
     m_descriptionLabel->setWordWrap(true);
 
+    m_torrentSelector = new QComboBox(this);
+    m_torrentSelector->setFixedWidth(320);
+    m_torrentSelector->setStyleSheet(
+        "QComboBox {"
+        "  background-color: #1e1e2e;"
+        "  color: #cdd6f4;"
+        "  border: 1px solid #45475a;"
+        "  border-radius: 6px;"
+        "  padding: 6px 12px;"
+        "  font-weight: bold;"
+        "}"
+        "QComboBox::drop-down {"
+        "  border: none;"
+        "}"
+        "QComboBox QAbstractItemView {"
+        "  background-color: #181825;"
+        "  color: #cdd6f4;"
+        "  selection-background-color: #45475a;"
+        "}"
+    );
+
     m_playButton = new QPushButton("Reproducción Torrent", this);
     m_playButton->setCursor(Qt::PointingHandCursor);
-    m_playButton->setFixedWidth(200);
+    m_playButton->setFixedWidth(260);
     m_playButton->setStyleSheet(
         "QPushButton {"
         "  background-color: #a6e3a1;"
@@ -122,35 +162,34 @@ void MovieDetailWidget::setupUi()
         "QPushButton:hover {"
         "  background-color: #94e2d5;"
         "}"
+        "QPushButton:disabled {"
+        "  background-color: #45475a;"
+        "  color: #bac2de;"
+        "}"
     );
 
+    // leer la opción elegida en el QComboBox
     connect(m_playButton, &QPushButton::clicked, this, [this]() {
-        if (m_movie.streams.isEmpty()) {
-            qWarning() << "[MovieDetailWidget] No hay streams.";
+        if (m_torrentSelector->count() == 0) {
+            qWarning() << "[MovieDetailWidget] No hay torrents seleccionables.";
             return;
         }
 
-        QString magnetUrl;
-        for (const auto& stream : m_movie.streams) {
-            qDebug() << "[MovieDetailWidget] Stream:" << stream.server << stream.url;
-            if (stream.url.startsWith("magnet:", Qt::CaseInsensitive)) {
-                magnetUrl = stream.url;
-                break;
-            }
-        }
+        // Obtener el magnet URL guardado en la propiedad de datos del combo
+        const QString magnetUrl = m_torrentSelector->currentData().toString();
 
         if (magnetUrl.isEmpty()) {
-            qWarning() << "[MovieDetailWidget] No hay Magnet.";
+            qWarning() << "[MovieDetailWidget] El Magnet seleccionado está vacío.";
             return;
         }
 
         const QString tempPath = QStandardPaths::writableLocation(QStandardPaths::TempLocation);
         const QString savePath = QDir(tempPath).filePath("iptv_torrents");
 
-        qDebug() << "[MovieDetailWidget] Iniciando torrent:" << savePath;
+        qDebug() << "[MovieDetailWidget] Iniciando torrent seleccionado:" << m_torrentSelector->currentText();
 
         m_playButton->setEnabled(false);
-        m_playButton->setText("Conectando...");
+        m_playButton->setText("Buscando peers...");
 
         if (!m_torrentEngine->startMagnet(magnetUrl, savePath)) {
             m_playButton->setEnabled(true);
@@ -161,6 +200,7 @@ void MovieDetailWidget::setupUi()
     metaLayout->addWidget(m_titleLabel);
     metaLayout->addWidget(m_metaLabel);
     metaLayout->addWidget(m_descriptionLabel);
+    metaLayout->addWidget(m_torrentSelector);
     metaLayout->addWidget(m_playButton);
     metaLayout->addStretch();
 
@@ -214,15 +254,29 @@ void MovieDetailWidget::setMovie(const MovieItem& movie)
         m_posterLabel->setText("Sin Póster");
     }
 
-    const bool hasMagnet = std::any_of(m_movie.streams.begin(), m_movie.streams.end(),
-                                      [](const StreamInfo& stream) {
-                                          return stream.url.startsWith("magnet:", Qt::CaseInsensitive);
-                                      });
+    m_torrentSelector->clear();
 
-    if (!hasMagnet) {
+    int torrentCount = 0;
+    for (const auto& stream : m_movie.streams) {
+        if (stream.url.startsWith("magnet:", Qt::CaseInsensitive)) {
+            torrentCount++;
+            
+            // Formatear texto descriptivo con Idioma y Calidad
+            QString lang = stream.language.isEmpty() ? "?" : stream.language;
+            QString quality = stream.quality.isEmpty() ? "?" : stream.quality;
+
+            QString label = QString("Calidad:[%1] - Idioma:[%2]").arg(quality, lang);
+
+            m_torrentSelector->addItem(label, stream.url);
+        }
+    }
+
+    if (torrentCount == 0) {
+        m_torrentSelector->setVisible(false);
         m_playButton->setEnabled(false);
         m_playButton->setText("Sin Torrents");
     } else {
+        m_torrentSelector->setVisible(true);
         m_playButton->setEnabled(true);
         m_playButton->setText("Play");
     }
@@ -258,22 +312,26 @@ void MovieDetailWidget::onTorrentReadyToPlay()
         return;
     }
 
-    const QString url = m_torrentEngine->streamUrl();
-    if (url.isEmpty()) {
-        qWarning() << "[MovieDetailWidget] streamUrl vacío.";
+    const QString videoPath = m_torrentEngine->videoFilePath();
+    if (videoPath.isEmpty()) {
+        qWarning() << "[MovieDetailWidget] videoFilePath está vacío.";
         return;
     }
 
-    qDebug() << "[MovieDetailWidget] Torrent listo. Iniciando MPV:" << url;
+    qDebug() << "[MovieDetailWidget] Torrent listo. Reproduciendo archivo local con MPV:" << videoPath;
 
+    m_playButton->setEnabled(false);
     m_playButton->setText("Reproduciendo...");
-    m_videoPlayer->play(url);
+    
+    m_videoPlayer->play(videoPath);
 }
 
 void MovieDetailWidget::onTorrentError(const QString& message)
 {
-    qWarning() << "[MovieDetailWidget] Torrent:" << message;
+    qWarning() << "[MovieDetailWidget] Torrent Error:" << message;
 
     m_playButton->setEnabled(true);
     m_playButton->setText("Play");
+
+    QMessageBox::warning(this, "Error de Reproducción", message);
 }

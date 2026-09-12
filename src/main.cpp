@@ -1,5 +1,6 @@
 #include "mainwindow.hpp"
 #include "databasemanager.hpp"
+#include "torrentengine.hpp"
 
 #include <QApplication>
 #include <QFile>
@@ -7,6 +8,16 @@
 #include <QDateTime>
 #include <QDir>
 #include <iostream>
+#include <csignal>
+
+#include <csignal>
+
+void signalHandler(int signal)
+{
+    qDebug() << "[System] Señal de cierre recibida (" << signal << "). Limpiando archivos temporales...";
+    TorrentEngine::cleanTempDirectory();
+    std::exit(signal);
+}
 
 void customLogHandler(QtMsgType type, const QMessageLogContext &context, const QString &msg)
 {
@@ -37,6 +48,12 @@ void customLogHandler(QtMsgType type, const QMessageLogContext &context, const Q
 int main(int argc, char* argv[])
 {
     QApplication app(argc, argv);
+
+    TorrentEngine::cleanTempDirectory();
+
+    
+    std::signal(SIGINT, signalHandler);
+    std::signal(SIGTERM, signalHandler);
 
     // Activar el log handler
     qInstallMessageHandler(customLogHandler);

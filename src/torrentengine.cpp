@@ -10,14 +10,12 @@
 #include <libtorrent/torrent_info.hpp>
 #include <libtorrent/torrent_status.hpp>
 
+#include <QStandardPaths>
 #include <QDebug>
 #include <QDir>
 #include <QFileInfo>
-#include <QHostAddress>
-#include <QRegularExpression>
 
 #include <algorithm>
-#include <limits>
 
 namespace {
 
@@ -49,30 +47,43 @@ TorrentEngine::TorrentEngine(QObject* parent)
     qDebug() << "[TorrentEngine] Inicializando libtorrent...";
 
     libtorrent::settings_pack pack;
-    pack.set_str(libtorrent::settings_pack::listen_interfaces, "0.0.0.0:0");
+    
+    // Asignar un rango de puertos fijo para facilitar reglas de Firewall
+    pack.set_str(libtorrent::settings_pack::listen_interfaces, "0.0.0.0:6881,127.0.0.1:6881");
 
-    // Habilitar extensiones de descubrimiento
+    pack.set_int(libtorrent::settings_pack::download_rate_limit, 0); // Ilimitado
+    pack.set_int(libtorrent::settings_pack::upload_rate_limit, 0);
+    pack.set_int(libtorrent::settings_pack::connections_limit, 500);
+    pack.set_int(libtorrent::settings_pack::active_downloads, 10);
+
+    pack.set_int(libtorrent::settings_pack::max_allowed_in_request_queue, 2000);
+    pack.set_int(libtorrent::settings_pack::send_buffer_watermark, 3 * 1024 * 1024); // 3 MB Buffer
+    pack.set_int(libtorrent::settings_pack::max_out_request_queue, 1500);
+    pack.set_int(libtorrent::settings_pack::whole_pieces_threshold, 20);
+
+    // Habilitar descubrimiento
     pack.set_bool(libtorrent::settings_pack::enable_dht, true);
     pack.set_bool(libtorrent::settings_pack::enable_lsd, true);
     pack.set_bool(libtorrent::settings_pack::enable_upnp, true);
     pack.set_bool(libtorrent::settings_pack::enable_natpmp, true);
 
-    // Activar soporte para protocolo uTP (mejora rendimiento tras NATs)
+    // Habilitar protocolo uTP y TCP
     pack.set_bool(libtorrent::settings_pack::enable_incoming_utp, true);
     pack.set_bool(libtorrent::settings_pack::enable_outgoing_utp, true);
+    pack.set_bool(libtorrent::settings_pack::enable_incoming_tcp, true);
+    pack.set_bool(libtorrent::settings_pack::enable_outgoing_tcp, true);
+
+    // Habilitar encriptación
+    pack.set_int(libtorrent::settings_pack::out_enc_policy, libtorrent::settings_pack::pe_enabled);
+    pack.set_int(libtorrent::settings_pack::in_enc_policy, libtorrent::settings_pack::pe_enabled);
+    pack.set_int(libtorrent::settings_pack::allowed_enc_level, libtorrent::settings_pack::pe_both);
 
     pack.set_int(libtorrent::settings_pack::alert_mask,
                  libtorrent::alert_category::error |
                  libtorrent::alert_category::status |
                  libtorrent::alert_category::storage |
-                 libtorrent::alert_category::dht |
                  libtorrent::alert_category::peer |
                  libtorrent::alert_category::tracker);
-
-    pack.set_bool(libtorrent::settings_pack::enable_dht, true);
-    pack.set_bool(libtorrent::settings_pack::enable_lsd, true);
-    pack.set_bool(libtorrent::settings_pack::enable_upnp, true);
-    pack.set_bool(libtorrent::settings_pack::enable_natpmp, true);
 
     pack.set_str(libtorrent::settings_pack::dht_bootstrap_nodes,
                  "router.bittorrent.com:6881,"
@@ -82,15 +93,20 @@ TorrentEngine::TorrentEngine(QObject* parent)
 
     m_session.apply_settings(pack);
 
-    m_httpServer = new QTcpServer(this);
-    connect(m_httpServer, &QTcpServer::newConnection, this, &TorrentEngine::onNewHttpConnection);
-
     m_statusTimer = new QTimer(this);
-    connect(m_statusTimer, &QTimer::timeout, this, &TorrentEngine::updateEngineState);
+    connect(m_statusTimer, &QTimer::timeout,
+            this, &TorrentEngine::updateEngineState);
 
-    m_streamTimer = new QTimer(this);
-    m_streamTimer->setInterval(25); // No bloquea el event loop
-    connect(m_streamTimer, &QTimer::timeout, this, &TorrentEngine::sendNextStreamChunk);
+    m_timeoutTimer = new QTimer(this);
+    m_timeoutTimer->setSingleShot(true);
+
+    connect(m_timeoutTimer, &QTimer::timeout, this, [this]() {
+        if (!m_isReadyToPlay) {
+            emit errorOccurred(
+                "Tiempo de espera agotado: Sin fuentes suficientes (seeders)."
+            );
+        }
+    });
 
     qDebug() << "[TorrentEngine] Motor libtorrent listo.";
 }
@@ -106,13 +122,8 @@ bool TorrentEngine::startMagnet(const QString& magnetUrl, const QString& savePat
     qDebug() << "[TorrentEngine] startMagnet()";
     stop();
 
-    if (magnetUrl.trimmed().isEmpty()) {
-        emit errorOccurred("La URL Magnet está vacía.");
-        return false;
-    }
-
-    if (savePath.trimmed().isEmpty()) {
-        emit errorOccurred("La ruta de descarga está vacía.");
+    if (magnetUrl.trimmed().isEmpty() || savePath.trimmed().isEmpty()) {
+        emit errorOccurred("Datos de magnet o ruta inválidos.");
         return false;
     }
 
@@ -122,156 +133,139 @@ bool TorrentEngine::startMagnet(const QString& magnetUrl, const QString& savePat
         return false;
     }
 
-    if (!m_httpServer->listen(QHostAddress::LocalHost, 0)) {
-        emit errorOccurred(QString("No se pudo iniciar el servidor HTTP: %1").arg(m_httpServer->errorString()));
-        return false;
-    }
-
-    m_serverPort = m_httpServer->serverPort();
-    qDebug() << "[TorrentEngine] HTTP local:" << m_serverPort;
-
     libtorrent::error_code ec;
     libtorrent::add_torrent_params params = libtorrent::parse_magnet_uri(magnetUrl.toStdString(), ec);
 
     if (ec) {
-        qWarning() << "[TorrentEngine] Error Magnet:" << QString::fromStdString(ec.message());
         emit errorOccurred(QString("Magnet inválido: %1").arg(QString::fromStdString(ec.message())));
-        m_httpServer->close();
         return false;
     }
 
-    // --- INYECTAR TRACKERS DE RESPALDO ---
-    std::vector<std::string> fallbackTrackers = {
+    // --- INYECTAR TRACKERS HTTP/HTTPS (Superan bloqueos UDP/Firewall) ---
+    std::vector<std::string> robustTrackers = {
+        "http://tracker.opentrackr.org:1337/announce",
+        "https://tracker.tamersil.com:443/announce",
+        "http://tracker.openbittorrent.com:80/announce",
         "udp://tracker.opentrackr.org:1337/announce",
-        "udp://open.stealth.si:80/announce",
-        "udp://tracker.torrent.eu.org:451/announce",
-        "udp://explodie.org:6969/announce"
+        "udp://open.stealth.si:80/announce"
     };
-    params.trackers.insert(params.trackers.end(), fallbackTrackers.begin(), fallbackTrackers.end());
 
+    params.trackers.insert(params.trackers.end(), robustTrackers.begin(), robustTrackers.end());
     params.save_path = savePath.toStdString();
+
+    params.storage_mode = libtorrent::storage_mode_sparse; // Asignación rápida eficiente
+    
+    // Asegurar que auto_managed y paused NO estén interfiriendo
+    params.flags |= libtorrent::torrent_flags::sequential_download;
     params.flags |= libtorrent::torrent_flags::auto_managed;
+    params.flags &= ~libtorrent::torrent_flags::paused;
 
     m_handle = m_session.add_torrent(params, ec);
 
     if (ec) {
-        qWarning() << "[TorrentEngine] add_torrent:" << QString::fromStdString(ec.message());
         emit errorOccurred(QString("No se pudo añadir el Magnet: %1").arg(QString::fromStdString(ec.message())));
-        m_httpServer->close();
+        m_handle = libtorrent::torrent_handle();
         return false;
     }
 
-    // Streaming secuencial
-    m_handle.set_flags(libtorrent::torrent_flags::sequential_download);
-
+    m_videoFilePath.clear();
     m_videoFileIndex = -1;
     m_fileSize = 0;
     m_fileOffset = 0;
-
-    m_streamStart = 0;
-    m_streamEnd = 0;
-    m_streamPosition = 0;
-
     m_isReadyToPlay = false;
-    m_streaming = false;
-    m_httpHeadersSent = false;
     m_metadataLogged = false;
 
-    m_lastRequestedPiece = libtorrent::piece_index_t(-1);
-
-    // --- CONFIGURAR TIMEOUT (20 segundos sin arrancar) ---
-    if (!m_timeoutTimer) {
-        m_timeoutTimer = new QTimer(this);
-        m_timeoutTimer->setSingleShot(true);
-        connect(m_timeoutTimer, &QTimer::timeout, this, [this]() {
-            if (!m_isReadyToPlay) {
-                emit errorOccurred("Tiempo de espera agotado: Sin fuentes suficientes (seeders).");
-            }
-        });
-    }
-    m_timeoutTimer->start(180000);
-
+    m_timeoutTimer->start(180000); // 3 minutos
     m_statusTimer->start(500);
 
-    qDebug() << "[TorrentEngine] Torrent añadido.";
-    qDebug() << "[TorrentEngine] Esperando metadata...";
-
+    qDebug() << "[TorrentEngine] Torrent añadido con éxito.";
     return true;
+}
+
+void TorrentEngine::cleanTempDirectory()
+{
+    const QString tempPath = QStandardPaths::writableLocation(QStandardPaths::TempLocation);
+    const QString savePath = QDir(tempPath).filePath("iptv_torrents");
+    
+    QDir dir(savePath);
+    if (dir.exists()) {
+        if (dir.removeRecursively()) {
+            qDebug() << "[TorrentEngine] Carpeta temporal purgada exitosamente al iniciar:" << savePath;
+        } else {
+            qWarning() << "[TorrentEngine] No se pudieron eliminar algunos archivos residuales en:" << savePath;
+        }
+    }
 }
 
 void TorrentEngine::stop()
 {
-    if (m_statusTimer) m_statusTimer->stop();
-    if (m_streamTimer) m_streamTimer->stop();
-    if (m_timeoutTimer) m_timeoutTimer->stop();
-
-    stopStreaming();
-
-    if (m_clientSocket) {
-        m_clientSocket->disconnect(this);
-        m_clientSocket->disconnectFromHost();
-        m_clientSocket->deleteLater();
-        m_clientSocket = nullptr;
+    if (m_statusTimer) {
+        m_statusTimer->stop();
     }
 
-    if (m_httpServer) {
-        m_httpServer->close();
+    if (m_timeoutTimer) {
+        m_timeoutTimer->stop();
     }
 
     if (m_handle.is_valid()) {
-        qDebug() << "[TorrentEngine] Eliminando torrent.";
-        m_session.remove_torrent(m_handle);
+        qDebug() << "[TorrentEngine] Eliminando torrent y borrando archivos descargados de disco...";
+        
+        // --- ELIMINA LOS ARCHIVOS TEMPORALES Y LA CARPETA EN DISCO ---
+        m_session.remove_torrent(m_handle, libtorrent::session_handle::delete_files);
     }
 
     m_handle = libtorrent::torrent_handle();
 
+    m_videoFilePath.clear();
     m_videoFileIndex = -1;
     m_fileSize = 0;
     m_fileOffset = 0;
 
-    m_streamStart = 0;
-    m_streamEnd = 0;
-    m_streamPosition = 0;
-
-    m_serverPort = 0;
-
     m_isReadyToPlay = false;
-    m_streaming = false;
-    m_httpHeadersSent = false;
     m_metadataLogged = false;
 
-    m_httpRequestBuffer.clear();
-    m_lastRequestedPiece = libtorrent::piece_index_t(-1);
-
-    qDebug() << "[TorrentEngine] Motor detenido.";
+    qDebug() << "[TorrentEngine] Motor detenido y disco limpiado.";
 }
 
-QString TorrentEngine::streamUrl() const
+QString TorrentEngine::videoFilePath() const
 {
-    if (m_serverPort == 0) {
-        return {};
-    }
-    return QString("http://127.0.0.1:%1/stream").arg(m_serverPort);
+    return m_videoFilePath;
 }
 
-int TorrentEngine::findVideoFileIndex(const libtorrent::torrent_info& info)
+int TorrentEngine::findVideoFileIndex(
+    const libtorrent::torrent_info& info)
 {
     const auto& fs = info.layout();
+
     int bestIndex = -1;
     qint64 bestSize = 0;
 
     // 1. Buscar archivos con extensión de vídeo
     for (int i = 0; i < info.num_files(); ++i) {
         const libtorrent::file_index_t index(i);
-        if (fs.pad_file_at(index)) continue;
 
-        const qint64 size = static_cast<qint64>(fs.file_size(index));
-        if (size <= 0) continue;
+        if (fs.pad_file_at(index)) {
+            continue;
+        }
+
+        const qint64 size =
+            static_cast<qint64>(fs.file_size(index));
+
+        if (size <= 0) {
+            continue;
+        }
 
         const auto nameView = fs.file_name(index);
-        const QString name = QString::fromUtf8(nameView.data(), static_cast<int>(nameView.size()));
 
-        if (isIgnoredFile(name)) continue;
+        const QString name =
+            QString::fromUtf8(
+                nameView.data(),
+                static_cast<int>(nameView.size())
+            );
+
+        if (isIgnoredFile(name)) {
+            continue;
+        }
 
         if (isVideoExtension(name) && size > bestSize) {
             bestSize = size;
@@ -279,19 +273,34 @@ int TorrentEngine::findVideoFileIndex(const libtorrent::torrent_info& info)
         }
     }
 
-    // 2. Si no hay extensión reconocida, tomar el archivo válido más grande
+    // 2. Si no hay extensión reconocida,
+    //    tomar el archivo válido más grande
     if (bestIndex < 0) {
         for (int i = 0; i < info.num_files(); ++i) {
             const libtorrent::file_index_t index(i);
-            if (fs.pad_file_at(index)) continue;
 
-            const qint64 size = static_cast<qint64>(fs.file_size(index));
-            if (size <= 0) continue;
+            if (fs.pad_file_at(index)) {
+                continue;
+            }
+
+            const qint64 size =
+                static_cast<qint64>(fs.file_size(index));
+
+            if (size <= 0) {
+                continue;
+            }
 
             const auto nameView = fs.file_name(index);
-            const QString name = QString::fromUtf8(nameView.data(), static_cast<int>(nameView.size()));
 
-            if (isIgnoredFile(name)) continue;
+            const QString name =
+                QString::fromUtf8(
+                    nameView.data(),
+                    static_cast<int>(nameView.size())
+                );
+
+            if (isIgnoredFile(name)) {
+                continue;
+            }
 
             if (size > bestSize) {
                 bestSize = size;
@@ -305,31 +314,101 @@ int TorrentEngine::findVideoFileIndex(const libtorrent::torrent_info& info)
 
 bool TorrentEngine::initializeVideoFile()
 {
-    if (!m_handle.is_valid()) return false;
+    if (!m_handle.is_valid()) {
+        return false;
+    }
 
     auto info = m_handle.torrent_file();
-    if (!info || !info->is_loaded()) return false;
+
+    if (!info) {
+        return false;
+    }
 
     m_videoFileIndex = findVideoFileIndex(*info);
+
     if (m_videoFileIndex < 0) {
-        emit errorOccurred("No se encontró ningún archivo de vídeo.");
+        emit errorOccurred(
+            "No se encontró ningún archivo de vídeo."
+        );
         return false;
     }
 
     const auto& fs = info->layout();
+
     const libtorrent::file_index_t index(m_videoFileIndex);
 
-    m_fileSize = static_cast<qint64>(fs.file_size(index));
-    m_fileOffset = static_cast<qint64>(fs.file_offset(index));
+    m_fileSize =
+        static_cast<qint64>(fs.file_size(index));
+
+    m_fileOffset =
+        static_cast<qint64>(fs.file_offset(index));
 
     const auto nameView = fs.file_name(index);
-    const QString fileName = QString::fromUtf8(nameView.data(), static_cast<int>(nameView.size()));
 
-    qDebug() << "[TorrentEngine] Archivo seleccionado:" << fileName;
-    qDebug() << "[TorrentEngine] Tamaño:" << m_fileSize << "bytes";
-    qDebug() << "[TorrentEngine] Offset:" << m_fileOffset;
+    const QString fileName =
+        QString::fromUtf8(
+            nameView.data(),
+            static_cast<int>(nameView.size())
+        );
+
+    const auto pathView = fs.file_path(index);
+
+    const QString relativePath =
+        QString::fromUtf8(
+            pathView.data(),
+            static_cast<int>(pathView.size())
+        );
+
+    const QString savePath =
+        QString::fromStdString(
+            m_handle.status().save_path
+        );
+
+    m_videoFilePath =
+        QDir::cleanPath(
+            QDir(savePath).filePath(relativePath)
+        );
+
+    qDebug() << "[TorrentEngine] Archivo seleccionado:"
+             << fileName;
+
+    qDebug() << "[TorrentEngine] Ruta relativa:"
+             << relativePath;
+
+    qDebug() << "[TorrentEngine] Ruta absoluta:"
+             << m_videoFilePath;
+
+    qDebug() << "[TorrentEngine] Tamaño:"
+             << m_fileSize << "bytes";
+
+    qDebug() << "[TorrentEngine] Offset:"
+             << m_fileOffset;
 
     emit metadataLoaded(fileName, m_fileSize);
+
+    return true;
+}
+
+bool TorrentEngine::hasInitialVideoPieces() const
+{
+    if (!m_handle.is_valid() || m_videoFileIndex < 0 || m_fileSize <= 0) 
+        return false;
+
+    auto info = m_handle.torrent_file();
+    if (!info) return false;
+
+    const auto& fs = info->layout();
+    const libtorrent::file_index_t fileIndex(m_videoFileIndex);
+
+    const auto first = fs.map_file(fileIndex, 0, 1).piece;
+    
+    constexpr int REQUIRED_PIECES = 15;
+    for (int i = 0; i < REQUIRED_PIECES; ++i) {
+        if (!m_handle.have_piece(first + libtorrent::piece_index_t::diff_type(i))) {
+            return false;
+        }
+    }
+
     return true;
 }
 
@@ -338,421 +417,214 @@ void TorrentEngine::prioritizeStreamingPieces()
     if (!m_handle.is_valid()) return;
 
     auto info = m_handle.torrent_file();
-    if (!info || !info->is_loaded() || m_videoFileIndex < 0) return;
+    if (!info || m_videoFileIndex < 0 || m_fileSize <= 0) return;
+
+    // Descargar ÚNICAMENTE el archivo de vídeo seleccionado
+    std::vector<libtorrent::download_priority_t> filePriorities(info->num_files(), libtorrent::dont_download);
+    filePriorities[m_videoFileIndex] = libtorrent::default_priority;
+    m_handle.prioritize_files(filePriorities);
+
+    // Activar modo secuencial estricto en la manija del torrent
+    m_handle.set_flags(libtorrent::torrent_flags::sequential_download);
 
     const auto& fs = info->layout();
     const libtorrent::file_index_t fileIndex(m_videoFileIndex);
 
-    const auto first = fs.map_file(fileIndex, 0, 1);
-    const auto last = fs.map_file(fileIndex, m_fileSize - 1, 1);
+    const auto firstPiece = fs.map_file(fileIndex, 0, 1).piece;
+    const auto lastPiece = fs.map_file(fileIndex, m_fileSize - 1, 1).piece;
 
-    const auto firstPiece = first.piece;
-    const auto lastPiece = last.piece;
-
-    m_handle.set_sequential_range(firstPiece, lastPiece);
-
-    constexpr int START_PIECES = 10;
-    constexpr int END_PIECES = 10;
-
-    // Prioridad máxima a las primeras piezas (Cabezal)
-    for (int i = 0; i < START_PIECES; ++i) {
+    for (int i = 0; i < 15; ++i) {
         const auto piece = firstPiece + libtorrent::piece_index_t::diff_type(i);
         if (piece <= lastPiece) {
-            m_handle.piece_priority(piece, libtorrent::top_priority);
+            m_handle.set_piece_deadline(piece, 100 + (i * 50));
         }
     }
 
-    // Prioridad máxima a las últimas piezas (Índice de video / Cues)
-    for (int i = 0; i < END_PIECES; ++i) {
+    for (int i = 0; i < 5; ++i) {
         const auto piece = lastPiece - libtorrent::piece_index_t::diff_type(i);
         if (piece >= firstPiece) {
-            m_handle.piece_priority(piece, libtorrent::top_priority);
+            m_handle.set_piece_deadline(piece, 500);
         }
     }
-}
 
-bool TorrentEngine::isPieceInsideVideo(libtorrent::piece_index_t piece) const
-{
-    if (!m_handle.is_valid() || m_videoFileIndex < 0) return false;
-
-    auto info = m_handle.torrent_file();
-    if (!info || !info->is_loaded()) return false;
-
-    const auto& fs = info->layout();
-    const libtorrent::file_index_t fileIndex(m_videoFileIndex);
-
-    const auto first = fs.map_file(fileIndex, 0, 1);
-    const auto last = fs.map_file(fileIndex, m_fileSize - 1, 1);
-
-    return piece >= first.piece && piece <= last.piece;
+    m_handle.resume();
+    qDebug() << "[TorrentEngine] Descarga secuencial y deadlines configurados.";
 }
 
 void TorrentEngine::processTorrentAlerts()
 {
     std::vector<libtorrent::alert*> alerts;
+
     m_session.pop_alerts(&alerts);
 
     for (const libtorrent::alert* alert : alerts) {
-        if (auto a = libtorrent::alert_cast<libtorrent::metadata_received_alert>(alert)) {
+        if (auto a =
+                libtorrent::alert_cast<
+                    libtorrent::metadata_received_alert>(
+                    alert)) {
+
             Q_UNUSED(a);
-            qDebug() << "[TorrentEngine] *** METADATA RECIBIDA ***";
+
+            qDebug()
+                << "[TorrentEngine] *** METADATA RECIBIDA ***";
+
             m_metadataLogged = true;
 
-            if (!initializeVideoFile()) return;
+            if (!initializeVideoFile()) {
+                continue;
+            }
+
             prioritizeStreamingPieces();
+
             continue;
         }
 
-        if (auto a = libtorrent::alert_cast<libtorrent::metadata_failed_alert>(alert)) {
-            qWarning() << "[TorrentEngine] Metadata FAILED:" << QString::fromStdString(a->error.message());
-            emit errorOccurred(QString("No se pudieron obtener los metadatos: %1")
-                                   .arg(QString::fromStdString(a->error.message())));
+        if (auto a =
+                libtorrent::alert_cast<
+                    libtorrent::metadata_failed_alert>(
+                    alert)) {
+
+            qWarning()
+                << "[TorrentEngine] Metadata FAILED:"
+                << QString::fromStdString(
+                       a->error.message()
+                   );
+
+            emit errorOccurred(
+                QString("No se pudieron obtener los metadatos: %1")
+                    .arg(
+                        QString::fromStdString(
+                            a->error.message()
+                        )
+                    )
+            );
+
             continue;
         }
 
-        if (auto a = libtorrent::alert_cast<libtorrent::torrent_error_alert>(alert)) {
-            qWarning() << "[TorrentEngine] TORRENT ERROR:" << QString::fromStdString(a->error.message());
+        if (auto a =
+                libtorrent::alert_cast<
+                    libtorrent::torrent_error_alert>(
+                    alert)) {
+
+            qWarning()
+                << "[TorrentEngine] TORRENT ERROR:"
+                << QString::fromStdString(
+                       a->error.message()
+                   );
+
+            emit errorOccurred(
+                QString("Error del torrent: %1")
+                    .arg(
+                        QString::fromStdString(
+                            a->error.message()
+                        )
+                    )
+            );
+
             continue;
         }
 
-        if (auto a = libtorrent::alert_cast<libtorrent::tracker_error_alert>(alert)) {
-            qWarning() << "[TorrentEngine] TRACKER ERROR:" << QString::fromStdString(a->failure_reason());
+        if (auto a =
+                libtorrent::alert_cast<
+                    libtorrent::tracker_error_alert>(
+                    alert)) {
+
+            qWarning()
+                << "[TorrentEngine] TRACKER ERROR:"
+                << QString::fromStdString(
+                       a->failure_reason()
+                   );
+
             continue;
         }
 
-        if (auto a = libtorrent::alert_cast<libtorrent::dht_error_alert>(alert)) {
-            qWarning() << "[TorrentEngine] DHT ERROR:" << QString::fromStdString(a->error.message());
+        if (auto a =
+                libtorrent::alert_cast<
+                    libtorrent::dht_error_alert>(
+                    alert)) {
+
+            qWarning()
+                << "[TorrentEngine] DHT ERROR:"
+                << QString::fromStdString(
+                       a->error.message()
+                   );
+
             continue;
         }
 
-        if (auto a = libtorrent::alert_cast<libtorrent::read_piece_alert>(alert)) {
-            processReadPieceAlert(a);
-            continue;
-        }
+        if (auto a =
+                libtorrent::alert_cast<
+                    libtorrent::listen_failed_alert>(
+                    alert)) {
 
-        if (auto a = libtorrent::alert_cast<libtorrent::listen_failed_alert>(alert)) {
-            qWarning() << "[TorrentEngine] LISTEN ERROR:" << QString::fromStdString(a->error.message());
+            qWarning()
+                << "[TorrentEngine] LISTEN ERROR:"
+                << QString::fromStdString(
+                       a->error.message()
+                   );
+
             continue;
         }
     }
-}
-
-void TorrentEngine::processReadPieceAlert(const libtorrent::read_piece_alert* alert)
-{
-    if (!alert) return;
-
-    if (alert->error) {
-        qWarning() << "[TorrentEngine] read_piece error:" << QString::fromStdString(alert->error.message());
-        return;
-    }
-
-    qDebug() << "[TorrentEngine] Pieza leída:" << static_cast<int>(alert->piece)
-             << "bytes:" << alert->size;
 }
 
 void TorrentEngine::updateEngineState()
 {
     processTorrentAlerts();
 
-    if (!m_handle.is_valid()) return;
+    if (!m_handle.is_valid()) {
+        return;
+    }
 
     const auto status = m_handle.status();
 
-    emit progressUpdated(status.progress * 100.0f,
-                         status.download_payload_rate,
-                         status.num_peers);
+    emit progressUpdated(
+        status.progress * 100.0f,
+        status.download_payload_rate,
+        status.num_peers
+    );
 
     if (!status.has_metadata) {
-        qDebug() << QString("[TorrentEngine] Metadata... Peers=%1").arg(status.num_peers);
+        qDebug()
+            << QString(
+                   "[TorrentEngine] Metadata... "
+                   "Peers=%1"
+               )
+                   .arg(status.num_peers);
+
         return;
     }
 
     if (m_videoFileIndex < 0) {
-        if (!initializeVideoFile()) return;
+        if (!initializeVideoFile()) {
+            return;
+        }
+
         prioritizeStreamingPieces();
     }
 
-    if (m_fileSize <= 0) return;
+    if (m_fileSize <= 0) {
+        return;
+    }
 
-    auto info = m_handle.torrent_file();
-    if (!info) return;
+    if (!m_isReadyToPlay &&
+        hasInitialVideoPieces()) {
 
-    const auto& fs = info->layout();
-    const libtorrent::file_index_t fileIndex(m_videoFileIndex);
-    const auto first = fs.map_file(fileIndex, 0, 1);
+        qDebug()
+            << "[TorrentEngine] Primera pieza disponible."
+            << "Iniciando reproductor...";
 
-    if (!m_isReadyToPlay && m_handle.have_piece(first.piece)) {
-        qDebug() << "[TorrentEngine] Primera pieza disponible. Iniciando reproductor...";
+        qDebug()
+            << "[TorrentEngine] Archivo:"
+            << m_videoFilePath;
+
         m_isReadyToPlay = true;
-        
+
         if (m_timeoutTimer) {
             m_timeoutTimer->stop();
         }
 
         emit readyToPlay();
     }
-}
-
-bool TorrentEngine::parseHttpRequest(const QByteArray& request)
-{
-    if (!request.startsWith("GET /stream")) {
-        return false;
-    }
-
-    m_streamStart = 0;
-    m_streamEnd = m_fileSize - 1;
-
-    const QList<QByteArray> lines = request.split('\n');
-
-    for (QByteArray line : lines) {
-        line = line.trimmed();
-
-        if (!line.toLower().startsWith("range:")) continue;
-
-        const int eq = line.indexOf('=');
-        if (eq < 0) continue;
-
-        QByteArray range = line.mid(eq + 1).trimmed(); // e.g. "0-" o "100-500"
-        const int dash = range.indexOf('-');
-        if (dash < 0) continue;
-
-        const QByteArray startBytes = range.left(dash).trimmed();
-        const QByteArray endBytes = range.mid(dash + 1).trimmed();
-
-        bool ok = false;
-
-        if (!startBytes.isEmpty()) {
-            const qint64 start = startBytes.toLongLong(&ok);
-            if (ok && start >= 0 && start < m_fileSize) {
-                m_streamStart = start;
-            }
-        }
-
-        if (!endBytes.isEmpty()) {
-            const qint64 end = endBytes.toLongLong(&ok);
-            if (ok && end >= m_streamStart && end < m_fileSize) {
-                m_streamEnd = end;
-            }
-        }
-
-        break;
-    }
-
-    if (m_streamEnd < m_streamStart) {
-        m_streamEnd = m_fileSize - 1;
-    }
-
-    m_streamPosition = m_streamStart;
-    return true;
-}
-
-void TorrentEngine::sendHttpResponse(int statusCode,
-                                     const QByteArray& statusText,
-                                     const QByteArray& contentType,
-                                     qint64 contentLength,
-                                     const QByteArray& extraHeaders)
-{
-    if (!m_clientSocket) return;
-
-    const QByteArray headers =
-        QByteArray("HTTP/1.1 ") + QByteArray::number(statusCode) + " " + statusText + "\r\n" +
-        "Content-Type: " + contentType + "\r\n" +
-        "Content-Length: " + QByteArray::number(contentLength) + "\r\n" +
-        "Accept-Ranges: bytes\r\n" +
-        "Connection: keep-alive\r\n" +
-        extraHeaders + "\r\n";
-
-    m_clientSocket->write(headers);
-}
-
-void TorrentEngine::onNewHttpConnection()
-{
-    if (!m_httpServer) return;
-
-    while (m_httpServer->hasPendingConnections()) {
-        QTcpSocket* socket = m_httpServer->nextPendingConnection();
-        if (!socket) continue;
-
-        // Detener el streaming activo antes de asignar la nueva conexión
-        m_streamTimer->stop();
-        m_streaming = false;
-
-        if (m_clientSocket) {
-            m_clientSocket->disconnect();
-            m_clientSocket->abort();
-            m_clientSocket->deleteLater();
-            m_clientSocket = nullptr;
-        }
-
-        m_clientSocket = socket;
-        m_httpRequestBuffer.clear();
-
-        connect(m_clientSocket, &QTcpSocket::readyRead, this, &TorrentEngine::onHttpReadyRead);
-        connect(m_clientSocket, &QTcpSocket::disconnected, this, [this]() {
-            stopStreaming();
-            if (m_clientSocket) {
-                m_clientSocket->deleteLater();
-                m_clientSocket = nullptr;
-            }
-        });
-
-        qDebug() << "[TorrentEngine HTTP] Nueva conexión aceptada.";
-    }
-}
-
-void TorrentEngine::onHttpReadyRead()
-{
-    if (!m_clientSocket) return;
-
-    m_httpRequestBuffer += m_clientSocket->readAll();
-
-    if (!m_httpRequestBuffer.contains("\r\n\r\n")) return;
-
-    const QByteArray request = m_httpRequestBuffer;
-    m_httpRequestBuffer.clear();
-
-    qDebug() << "[TorrentEngine HTTP] Request:" << request.left(500);
-
-    if (!parseHttpRequest(request)) {
-        sendHttpResponse(404, "Not Found", "text/plain", 0);
-        m_clientSocket->disconnectFromHost();
-        return;
-    }
-
-    if (m_videoFileIndex < 0 || m_fileSize <= 0) {
-        sendHttpResponse(503, "Service Unavailable", "text/plain", 0);
-        return;
-    }
-
-    const QString savePath = QString::fromStdString(m_handle.status().save_path);
-    auto info = m_handle.torrent_file();
-    if (!info) return;
-
-    const auto& fs = info->layout();
-    const libtorrent::file_index_t fileIndex(m_videoFileIndex);
-
-    const QString relativePath = QString::fromUtf8(fs.file_path(fileIndex).data(),
-                                                   static_cast<int>(fs.file_path(fileIndex).size()));
-    const QString absolutePath = QDir::cleanPath(QDir(savePath).filePath(relativePath));
-
-    if (!m_streamFile.isOpen()) {
-        m_streamFile.setFileName(absolutePath);
-
-        if (!m_streamFile.open(QIODevice::ReadOnly)) {
-            qWarning() << "[TorrentEngine HTTP] No se pudo abrir:" << absolutePath;
-            sendHttpResponse(404, "Not Found", "text/plain", 0);
-            return;
-        }
-    }
-
-    const bool isPartial = (m_streamStart != 0 || m_streamEnd != m_fileSize - 1);
-    const qint64 contentLength = m_streamEnd - m_streamStart + 1;
-
-    if (isPartial) {
-        const QByteArray extra = QByteArray("Content-Range: bytes ") +
-                                 QByteArray::number(m_streamStart) + "-" +
-                                 QByteArray::number(m_streamEnd) + "/" +
-                                 QByteArray::number(m_fileSize) + "\r\n";
-
-        sendHttpResponse(206, "Partial Content", "video/mp4", contentLength, extra);
-    } else {
-        sendHttpResponse(200, "OK", "video/mp4", contentLength);
-    }
-
-    m_httpHeadersSent = true;
-    m_streaming = true;
-
-    if (!m_streamTimer->isActive()) {
-        m_streamTimer->start();
-    }
-
-    qDebug() << "[TorrentEngine HTTP] Streaming iniciado:"
-             << m_streamStart << "->" << m_streamEnd;
-}
-
-void TorrentEngine::startStreaming()
-{
-    if (!m_streamTimer->isActive()) {
-        m_streamTimer->start();
-    }
-}
-
-void TorrentEngine::stopStreaming()
-{
-    m_streaming = false;
-    m_httpHeadersSent = false;
-
-    if (m_streamTimer) m_streamTimer->stop();
-    if (m_streamFile.isOpen()) m_streamFile.close();
-
-    m_lastRequestedPiece = libtorrent::piece_index_t(-1);
-}
-
-void TorrentEngine::sendNextStreamChunk()
-{
-    if (!m_streaming || !m_clientSocket || m_clientSocket->state() != QAbstractSocket::ConnectedState || !m_handle.is_valid()) {
-        stopStreaming();
-        return;
-    }
-
-    if (m_streamPosition > m_streamEnd) {
-        qDebug() << "[TorrentEngine HTTP] Streaming terminado.";
-        stopStreaming();
-        return;
-    }
-
-    if (m_clientSocket->bytesToWrite() > 2 * 1024 * 1024) {
-        return; // Esperar a que el buffer del cliente se vacíe
-    }
-
-    auto info = m_handle.torrent_file();
-    if (!info) return;
-
-    const auto& fs = info->layout();
-    const libtorrent::file_index_t fileIndex(m_videoFileIndex);
-
-    const auto request = fs.map_file(fileIndex, m_streamPosition, 1);
-    const auto piece = request.piece;
-
-    // Si la pieza no está lista, le damos prioridad alta y esperamos al siguiente tick
-    if (!m_handle.have_piece(piece)) {
-        m_handle.piece_priority(piece, libtorrent::top_priority);
-
-        for (int i = 1; i <= 8; ++i) {
-            const auto nextPiece = piece + libtorrent::piece_index_t::diff_type(i);
-            if (isPieceInsideVideo(nextPiece)) {
-                m_handle.piece_priority(nextPiece, libtorrent::top_priority);
-            }
-        }
-        return;
-    }
-
-    if (!m_streamFile.isOpen()) return;
-
-    const qint64 torrentPieceOffset = static_cast<int>(piece);
-    const qint64 offsetInsidePiece = (m_fileOffset + m_streamPosition) - torrentPieceOffset;
-    const qint64 pieceSize = fs.piece_size(piece);
-    const qint64 availableInPiece = pieceSize - offsetInsidePiece;
-
-    if (availableInPiece <= 0) {
-        qWarning() << "[TorrentEngine HTTP] Offset inválido.";
-        return;
-    }
-
-    const qint64 remaining = m_streamEnd - m_streamPosition + 1;
-    const qint64 amount = std::min<qint64>({availableInPiece, remaining, 1024 * 1024});
-
-    if (!m_streamFile.seek(m_streamPosition)) {
-        qWarning() << "[TorrentEngine HTTP] No se pudo hacer seek.";
-        return;
-    }
-
-    const QByteArray data = m_streamFile.read(amount);
-    if (data.isEmpty()) {
-        qWarning() << "[TorrentEngine HTTP] Lectura vacía.";
-        return;
-    }
-
-    m_clientSocket->write(data);
-    m_streamPosition += data.size();
 }
