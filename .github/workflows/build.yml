@@ -284,10 +284,17 @@ jobs:
 
           Write-Host ""
           Write-Host "Visual Studio:"
-          & "${env:ProgramFiles}\Microsoft Visual Studio\Installer\vswhere.exe" `
-            -latest `
-            -products * `
-            -property installationPath
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          if (!(Test-Path $vswhere)) {
+              $vswhere = "${env:ProgramFiles}\Microsoft Visual Studio\Installer\vswhere.exe"
+          }
+
+          if (Test-Path $vswhere) {
+              & $vswhere -latest -products * -property installationPath
+          } else {
+              Write-Error "No se encontró vswhere.exe en ninguna de las rutas esperadas."
+              exit 1
+          }
 
 
       # ============================================================
