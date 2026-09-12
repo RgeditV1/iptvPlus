@@ -1,55 +1,72 @@
+#include "mainwindow.hpp"
+#include "databasemanager.hpp"
+#include "torrentengine.hpp"
+
 #include <QApplication>
-#include <QtGlobal>
 #include <QFile>
 #include <QTextStream>
 #include <QDateTime>
-#include <QMutex>
 #include <QDir>
-#include <QStandardPaths>
-#include <qlogging.h>
-#include "mainwindow.hpp"
+#include <iostream>
+#include <csignal>
 
-// Variable global para proteger el archivo de logs en entornos multihilo
-QMutex logMutex;
+#include <csignal>
 
-void customLogMessageHandler(QtMsgType type, const QMessageLogContext& context, const QString& msg) {
-    QMutexLocker locker(&logMutex);
-
-    QString logPath = QCoreApplication::applicationDirPath() + "/debug.log";
-
-    QFile logFile(logPath);
-    if (!logFile.open(QIODevice::WriteOnly | QIODevice::Append | QIODevice::Text)) {
-        return;
-    }
-
-    QTextStream stream(&logFile);
-    QString timeStr = QDateTime::currentDateTime().toString("dd-MM-yyyy hh:mm:ss.zzz"); // Espanol fmt
-    QString typeStr;
-
-    switch (type) {
-    case QtDebugMsg:    typeStr = "[DEBUG]"; break;
-    case QtInfoMsg:     typeStr = "[INFO] "; break;
-    case QtWarningMsg:  typeStr = "[WARN] "; break;
-    case QtCriticalMsg: typeStr = "[CRIT] "; break;
-    case QtFatalMsg:    typeStr = "[FATAL]"; break;
-    }
-
-    stream << timeStr << " " << typeStr << " " << msg << "\n";
-
-    stream.flush();
-    logFile.close();
+void signalHandler(int signal)
+{
+    qDebug() << "[System] Señal de cierre recibida (" << signal << "). Limpiando archivos temporales...";
+    TorrentEngine::cleanTempDirectory();
+    std::exit(signal);
 }
 
-int main(int argc, char* argv[]) {
+void customLogHandler(QtMsgType type, const QMessageLogContext &context, const QString &msg)
+{
+    // Construir la ruta directamente en la carpeta del ejecutable
+    QString logPath = QCoreApplication::applicationDirPath() + "/app.log";
+    QFile logFile(logPath);
+
+    if (logFile.open(QIODevice::WriteOnly | QIODevice::Append | QIODevice::Text)) {
+        QTextStream stream(&logFile);
+        QString timeStr = QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss");
+        
+        QString typeStr;
+        switch (type) {
+            case QtDebugMsg:    typeStr = "[DEBUG]"; break;
+            case QtWarningMsg:  typeStr = "[WARN] "; break;
+            case QtCriticalMsg: typeStr = "[CRIT] "; break;
+            case QtFatalMsg:    typeStr = "[FATAL]"; break;
+            case QtInfoMsg:     typeStr = "[INFO] "; break;
+        }
+
+        QString formattedMsg = QString("[%1] %2 %3").arg(timeStr, typeStr, msg);
+        stream << formattedMsg << "\n";
+        
+        std::cout << formattedMsg.toStdString() << std::endl;
+    }
+}
+
+int main(int argc, char* argv[])
+{
     QApplication app(argc, argv);
 
-    // Redirigir todos los qMessage / qDebug a debug.log
-    qInstallMessageHandler(customLogMessageHandler);
+    TorrentEngine::cleanTempDirectory();
 
-    qInfo() << "Iniciando la aplicación IPTV Plus...";
+    
+    std::signal(SIGINT, signalHandler);
+    std::signal(SIGTERM, signalHandler);
 
-    MainWindow mainWindow;
-    mainWindow.show();
+    // Activar el log handler
+    //qInstallMessageHandler(customLogHandler);
+
+    qDebug() << "========================================";
+    qDebug() << "Iniciando iptvPlus...";
+
+    if (!DatabaseManager::instance().initDatabase()) {
+        qWarning("No se pudo conectar a la base de datos SQLite.");
+    }
+
+    MainWindow window;
+    window.show();
 
     return app.exec();
 }

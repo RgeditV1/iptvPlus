@@ -1,17 +1,20 @@
-# iptvPlus
+[![Build Windows 🪟](https://github.com/RgeditV1/iptvPlus/actions/workflows/build.yml/badge.svg)](https://github.com/RgeditV1/iptvPlus/actions/workflows/build.yml)
+
 Video Player for ```.m3u``` Files and Movies, Series is Coming Soon
 
-### build Visual Studio 2026
+![screenshoot](/screenshoot.png "IPTV ++ Screenshoot") ![screenshoot](/screenshoot2.png "IPTV ++ Screenshoot")
 
-### Config
+### Build
 
 Before run compilation command, you need ``libmpv-2.dll``, that is include in ``3rdparty/mpv`` in 4 compressed files.
 
 ```sh
 cmake -S . -B build `
-  -G "Visual Studio 18 2026" `
-  "-DQt6_DIR=C:\Qt\6.11.2\msvc2022_64\lib\cmake\Qt6" `
-  "-DCMAKE_INSTALL_PREFIX=build/install"
+  -G "Visual Studio 18 2026" -A x64 `
+  "-DQt6_DIR=C:/Qt/6.11.2/msvc2022_64/lib/cmake/Qt6" `
+  "-DCMAKE_INSTALL_PREFIX=build/install" `
+  "-DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake"  `
+  "-DVCPKG_TARGET_TRIPLET=x64-windows-static-md"
 
 # you can use Debug mode too
 cmake --build build --config Release
@@ -21,7 +24,12 @@ cmake --install build --config Release
 cpack --config build/CPackConfig.cmake -C Release
 ```
 
-### 3dpartys
-- mpv (videoplayer)
+### 3rdpartys
 
-![screenshoot](/screenshoot.png "IPTV ++ Screenshoot")
+All deps using vcpkg must be installed using ``x64-windows-static-md triplet``
+
+- ``mpv`` (videoplayer)
+- ``libtorrent`` (should use vcpkg)
+- ``vcpkg`` for lib magnaments (optional but recomended)
+- ``OpenSSL`` (should use vcpkg)
+- ``Boost`` (should use vcpkg)

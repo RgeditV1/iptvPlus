@@ -1,4 +1,19 @@
-# [0.1.2] - 2026-09-1
+# Lo Nuevo!
+
+## [0.2]
+
+### Cambio
+
+- Rework de la GUI completa y reestructuracion del programa
+- seccion de pelicula y busqueda añadida (Experimental)
+- Titulo de la ventana principal
+
+### Añadido
+- Icono de Aplicacion
+- Selector de Magnets (Experimental)
+- Selector de Pista de Audio y Subtitulos (Experimental)
+
+## [0.1.2]
 
 ### Añadido
 - Boton de Pantalla Completa (Full Screen)
@@ -11,7 +26,7 @@
 ### Revertido
 - Icono antiguo de Menu
 
-## [0.1.1] - 2026-08-25
+## [0.1.1]
 
 ### Añadido
 - Transparencia a los botones de Reproduccion y Menu
@@ -23,7 +38,7 @@
 - Eliminar contorno de boton de volumen
 - Ajuste de botones en la barra de control de reproduccion
 
-## [0.1] - 2026-08-24
+## [0.1]
 
 ### Añadido
 - Soporte para URLs .m3u: Ahora es posible cargar y reproducir listas de reproducción remotas directamente a través de enlaces HTTP/HTTPS.

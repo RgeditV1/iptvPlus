@@ -1,826 +1,815 @@
 #include "videoplayerwindow.hpp"
 
-#include <cstring>
+#include "mpvplayer.hpp"
 
-#include <QApplication>
-#include  <QIcon>
-#include <QDebug>
-#include <QPainter>
-#include <QPen>
+#include <QHBoxLayout>
+#include <QLabel>
+#include <QPushButton>
+#include <QSlider>
+#include <QIcon>
+#include <QVBoxLayout>
+#include <QMenu>
 
 VideoPlayerWindow::VideoPlayerWindow(QWidget* parent)
-    : QWidget(parent),
-    mpv(nullptr),
-    mpvTimer(nullptr),
-    videoContainer(nullptr),
-    controlsContainer(nullptr),
-    btnPrevious(nullptr),
-    btnNext(nullptr),
-    btnPlayPause(nullptr),
-    btnStop(nullptr),
-    volumeContainer(nullptr),
-    btnVolume(nullptr),
-    sliderVolume(nullptr),
-    isPaused(false),
-    isMuted(false),
-    volume(100),
-    previousVolume(100),
-    channelModel(nullptr),
-	currentChannelRow(-1), // sin canal por defecto
-    controlsTimer(nullptr)
+    : QWidget(parent)
 {
+    setWindowTitle("IPTV++");
+    resize(1280, 720);
     setMouseTracking(true);
 
     setupUi();
-    initMpv();
 
-    // Timer para ocultar la barra de controles principal
-    controlsTimer = new QTimer(this);
-    controlsTimer->setSingleShot(true);
+    m_player = new MpvPlayer(this);
 
-    connect(
-        controlsTimer,
-        &QTimer::timeout,
-        this,
-        [this]() {
-            updateControls(false);
+    m_controlsHideTimer = new QTimer(this);
+    m_controlsHideTimer->setSingleShot(true);
+
+    connect(m_controlsHideTimer, &QTimer::timeout, this, [this]() {
+        if (m_isFullscreen) {
+            m_controlsWidget->hide();
         }
-    );
+    });
+
+    setupConnections();
+
+    initializePlayer();
 }
 
-VideoPlayerWindow::~VideoPlayerWindow()
+VideoPlayerWindow::~VideoPlayerWindow() = default;
+
+bool VideoPlayerWindow::initializePlayer()
 {
-    if (controlsTimer)
-        controlsTimer->stop();
+    if (!m_player)
+        return false;
 
-    if (mpvTimer)
-        mpvTimer->stop();
+    if (!m_videoWidget)
+        return false;
 
-    if (mpv) {
-        mpv_terminate_destroy(mpv);
-        mpv = nullptr;
+    const WId wid = m_videoWidget->winId();
+
+    const bool initialized =
+        m_player->initialize(wid);
+
+    if (initialized) {
+
+        const double currentVol =
+            m_player->volume();
+
+        m_volumeSlider->setValue(
+            static_cast<int>(currentVol)
+        );
+
+        updateVolumeIcon(currentVol);
+    }
+
+    return initialized;
+}
+
+void VideoPlayerWindow::mouseMoveEvent(QMouseEvent* event)
+{
+    if (m_isFullscreen) {
+        resetControlsHideTimer();
+    }
+
+    QWidget::mouseMoveEvent(event);
+}
+
+void VideoPlayerWindow::onBufferingChanged(bool buffering)
+{
+    if (buffering) {
+        m_loadingSpinner->show();
+    } else {
+        m_loadingSpinner->hide();
+    }
+}
+
+void VideoPlayerWindow::handlePlaybackError(const QString& error)
+{
+    m_loadingSpinner->hide();
+
+    m_isPlaying = false;
+
+    m_playButton->setIcon(
+        QIcon(":/resources/icons/play.svg")
+    );
+
+    if (m_errorLabel) {
+
+        m_errorLabel->setText(
+            QString("Error de conexión/reproducción: %1")
+                .arg(error)
+        );
+
+        m_errorLabel->show();
     }
 }
 
 void VideoPlayerWindow::setupUi()
 {
-    this->setStyleSheet("VideoPlayerWindow { background-color: black; }");
+    m_mainLayout = new QVBoxLayout(this);
 
-    QVBoxLayout* mainLayout = new QVBoxLayout(this);
-    mainLayout->setContentsMargins(0, 0, 0, 0);
-    mainLayout->setSpacing(0);
+    m_mainLayout->setContentsMargins(0, 0, 0, 0);
+    m_mainLayout->setSpacing(0);
 
-    // =========================================================
-    // CONTENEDOR DEL VIDEO
-    // =========================================================
+    // ----------------------------------------
+    // Área de vídeo
+    // ----------------------------------------
 
-    videoContainer = new QWidget(this);
+    m_videoWidget = new QWidget(this);
 
-    videoContainer->setAttribute(Qt::WA_NativeWindow, true);
-    videoContainer->setAttribute(Qt::WA_DontCreateNativeAncestors, true);
-    videoContainer->setMouseTracking(true);
-    videoContainer->setStyleSheet("background-color: black;");
+    m_videoWidget->setMinimumSize(320, 180);
 
-    // =========================================================
-    // CARGA DE SPINNER
-    // =========================================================
+    m_videoWidget->setAttribute(
+        Qt::WA_NativeWindow
+    );
 
-    setupLoadingSpinner();
-
-    // =========================================================
-    // BARRA DE CONTROLES
-    // =========================================================
-
-    controlsContainer = new QWidget(this);
-    controlsContainer->setObjectName("controlsContainer");
-    controlsContainer->setAttribute(Qt::WA_StyledBackground, true);
-    controlsContainer->setMouseTracking(true);
-
-    controlsContainer->setStyleSheet(
-        "#controlsContainer {"
-        "    background-color: rgba(45, 45, 50, 120);"
-        "    border: none;"
-        "}"
-
-        "#controlsContainer QPushButton,"
-        "#controlsContainer QToolButton {"
-        "    color: white;"
-        "    background-color: transparent;"
-        "    border: none;"
-        "    border-radius: 4px;"
-        "    padding: 6px;"
-        "}"
-
-        "#controlsContainer QPushButton:hover,"
-        "#controlsContainer QToolButton:hover {"
-        "    background-color: rgba(255, 255, 255, 40);"
-        "}"
-
-        "#volumeContainer {"
-        "    background-color: transparent;"
-        "    border: none;"
-        "}"
-
-        "#volumeContainer QToolButton {"
-        "    background-color: transparent;"
-        "    border: none;"
-        "}"
-
-        "#volumeContainer QSlider {"
-        "    background-color: transparent;"
-        "    border: none;"
+    m_videoWidget->setStyleSheet(
+        "QWidget {"
+        "   background-color: black;"
+        "   border: 2px solid #89b4fa;"
+        "   border-radius: 8px;"
         "}"
     );
 
-    QHBoxLayout* controlsLayout = new QHBoxLayout(controlsContainer);
-    controlsLayout->setContentsMargins(8, 6, 8, 6);
-    controlsLayout->setSpacing(5);
+    m_videoWidget->setMouseTracking(true);
 
-    btnPlayPause = new QPushButton(controlsContainer);
-    btnPlayPause->setCursor(Qt::PointingHandCursor);
-    btnPlayPause->setIcon(QIcon(":/resources/icons/play.svg"));
+    m_videoWidget->installEventFilter(this);
 
-    btnStop = new QPushButton(controlsContainer);
-    btnStop->setCursor(Qt::PointingHandCursor);
-    btnStop->setIcon(QIcon(":/resources/icons/stop-circle.svg"));
-
-    btnNext = new QPushButton(controlsContainer);
-    btnNext->setCursor(Qt::PointingHandCursor);
-    btnNext->setIcon(QIcon(":/resources/icons/skip-forward.svg"));
-
-    btnPrevious = new QPushButton(controlsContainer);
-    btnPrevious->setCursor(Qt::PointingHandCursor);
-    btnPrevious->setIcon(QIcon(":/resources/icons/skip-back.svg"));
-
-    btnFullScreen = new QPushButton(controlsContainer);
-    btnFullScreen->setCursor(Qt::PointingHandCursor);
-    btnFullScreen->setIcon(QIcon(":/resources/icons/maximize.svg"));
-
-    // =========================================================
-    // CONTENEDOR DE VOLUMEN (ICONO Y SLIDER EN LÍNEA)
-    // =========================================================
-
-    volumeContainer = new QWidget(controlsContainer);
-    volumeContainer->setMouseTracking(true);
-    volumeContainer->setAttribute(Qt::WA_TranslucentBackground);
-    volumeContainer->setStyleSheet("background: transparent;");
-    // Ancho fijo: 32px (botón) + 5px (espacio) + 100px (slider) = 137px
-    volumeContainer->setFixedSize(137, 32);
-
-    btnVolume = new QToolButton(volumeContainer);
-    btnVolume->setIconSize(QSize(25, 25));
-    btnVolume->setCursor(Qt::PointingHandCursor);
-    // El botón se queda FIJO en la esquina izquierda (0,0) y no se moverá jamás
-    btnVolume->setGeometry(0, 0, 32, 32);
-
-    // Slider de volumen horizontal
-    sliderVolume = new QSlider(Qt::Horizontal, volumeContainer);
-    sliderVolume->setRange(0, 100);
-    sliderVolume->setValue(100);
-
-    // Posicionamos el slider exactamente a 5px de separación del botón (32px + 5px = 37px)
-    sliderVolume->setGeometry(37, 6, 100, 20);
-    sliderVolume->setCursor(Qt::PointingHandCursor);
-
-
-    sliderVolume->hide();
-
-
-    // =========================================================
-    // AGREGAR AL LAYOUT DE CONTROLES
-    // =========================================================
-    controlsLayout->addStretch(1);
-
-    controlsLayout->addWidget(btnPrevious);
-    controlsLayout->addWidget(btnPlayPause);
-    controlsLayout->addWidget(btnNext);
-    controlsLayout->addWidget(btnStop);
-
-    controlsLayout->addStretch(1);
-
-    controlsLayout->addWidget(volumeContainer);
-    controlsLayout->addWidget(btnFullScreen);
-
-    // =========================================================
-    // LAYOUT PRINCIPAL
-    // =========================================================
-
-    mainLayout->addWidget(videoContainer, 1);
-    mainLayout->addWidget(controlsContainer, 0);
-
-    // =========================================================
-    // REGISTRO DE EVENT FILTERS
-    // =========================================================
-
-    videoContainer->installEventFilter(this);
-    controlsContainer->installEventFilter(this);
-    btnPlayPause->installEventFilter(this);
-    btnStop->installEventFilter(this);
-    btnPrevious->installEventFilter(this);
-    btnNext->installEventFilter(this);
-    volumeContainer->installEventFilter(this);
-    btnVolume->installEventFilter(this);
-    sliderVolume->installEventFilter(this);
-    btnFullScreen->installEventFilter(this);
-
-    // =========================================================
-    // CONEXIONES
-    // =========================================================
-
-    connect(btnPlayPause, &QPushButton::clicked, this, &VideoPlayerWindow::togglePlayPause);
-    connect(btnFullScreen, &QPushButton::clicked, this, &VideoPlayerWindow::toggleFullScreen);
-    connect(btnPrevious, &QPushButton::clicked, this, &VideoPlayerWindow::playPreviousChannel);
-    connect(btnNext, &QPushButton::clicked, this, &VideoPlayerWindow::playNextChannel);
-    connect(sliderVolume, &QSlider::valueChanged, this, &VideoPlayerWindow::setVolume);
-    connect(btnVolume, &QToolButton::clicked, this, &VideoPlayerWindow::togleMute);
-    connect(btnStop, &QPushButton::clicked, this, &VideoPlayerWindow::stopMedia);
-
-    updateVolumeIcon();
-}
-
-void VideoPlayerWindow::setModel(ChannelListModel* model)
-{
-    channelModel = model;
-    currentChannelRow = -1;
-}
-
-void VideoPlayerWindow::playChannelAt(int row)
-{
-    if (!channelModel) {
-        qWarning() << "[VideoPlayerWindow] No hay un ChannelListModel asignado.";
-        return;
-    }
-
-    const M3UItem* item = channelModel->channelAt(row); // Obtiene el ítem de la fila[cite: 3, 5]
-    if (!item) {
-        qWarning() << "[VideoPlayerWindow] Fila inválida en el modelo de canales:" << row;
-        return;
-    }
-
-    currentChannelRow = row;
-    qDebug() << "[VideoPlayerWindow] Reproduciendo canal:" << item->title << "URL:" << item->url;
-    playMedia(item->url);
-    emit channelChanged(row);
-}
-
-void VideoPlayerWindow::playNextChannel()
-{
-    if (!channelModel || channelModel->rowCount() == 0) { // Consulta el total del modelo[cite: 3, 5]
-        qWarning() << "[VideoPlayerWindow] El modelo de canales está vacío o no asignado.";
-        return;
-    }
-
-    int totalRows = channelModel->rowCount(); //[cite: 3, 5]
-    // Avanzar a la siguiente fila (con loop circular)
-    int nextRow = (currentChannelRow + 1) % totalRows;
-
-    playChannelAt(nextRow);
-}
-
-void VideoPlayerWindow::playPreviousChannel()
-{
-    if (!channelModel || channelModel->rowCount() == 0) { //[cite: 3, 5]
-        qWarning() << "[VideoPlayerWindow] El modelo de canales está vacío o no asignado.";
-        return;
-    }
-
-    int totalRows = channelModel->rowCount(); //[cite: 3, 5]
-    // Retroceder a la fila anterior (con loop circular)
-    int prevRow = (currentChannelRow - 1 + totalRows) % totalRows;
-
-    playChannelAt(prevRow);
-}
-
-void VideoPlayerWindow::initMpv() {
-    mpv = mpv_create();
-    if (!mpv) {
-        qCritical() << "[VideoPlayerWindow] No se pudo crear la instancia de mpv.";
-        return;
-    }
-
-    mpv_set_option_string(mpv, "terminal", "no");
-    mpv_set_option_string(mpv, "msg-level", "all=warn");
-    mpv_set_option_string(mpv, "vo", "gpu");
-
-#if defined(Q_OS_WIN)
-    mpv_set_option_string(mpv, "gpu-context", "d3d11");
-#else
-    mpv_set_option_string(mpv, "gpu-context", "auto");
-#endif
-
-    mpv_set_option_string(mpv, "user-agent", "Mozilla/5.0");
-    mpv_set_option_string(mpv, "tls-verify", "no");
-
-    int64_t wid = static_cast<int64_t>(videoContainer->winId());
-    mpv_set_option(mpv, "wid", MPV_FORMAT_INT64, &wid);
-
-    if (mpv_initialize(mpv) < 0) {
-        qCritical() << "[VideoPlayerWindow] No se pudo inicializar mpv.";
-        return;
-    }
-
-    mpv_observe_property(
-        mpv,
-        0,
-        "demuxer-cache-duration",
-        MPV_FORMAT_DOUBLE
+    // Layout superpuesto sobre el video para el spinner y errores
+    QVBoxLayout* videoOverlayLayout = new QVBoxLayout(
+        m_videoWidget
     );
 
-    mpv_observe_property(
-        mpv,
-        0,
-        "paused",
-        MPV_FORMAT_FLAG
+    videoOverlayLayout->setAlignment(
+        Qt::AlignCenter
     );
 
-    // Detecta cuando MPV está inactivo o cargando un recurso nuevo/red
-    mpv_observe_property(
-        mpv,
-        0,
-        "core-idle",
-        MPV_FORMAT_FLAG
+    m_loadingSpinner = new QProgressBar(
+        m_videoWidget
     );
-    mpv_request_log_messages(mpv, "info");
 
-    mpvTimer = new QTimer(this);
-    connect(mpvTimer, &QTimer::timeout, this, &VideoPlayerWindow::onMpvEvents);
-    mpvTimer->start(10);
+    m_loadingSpinner->setRange(0, 0); // Modo indeterminado (animación continua)
 
-    qDebug() << "[VideoPlayerWindow] Instancia MPV inicializada correctamente.";
+    m_loadingSpinner->setTextVisible(false);
+
+    m_loadingSpinner->setFixedSize(60, 60);
+
+    // Estilo circular/estilizado para el spinner
+    m_loadingSpinner->setStyleSheet(
+        "QProgressBar {"
+        "   border: 4px solid #444444;"
+        "   border-top: 4px solid #00adb5;"
+        "   border-radius: 30px;"
+        "   background-color: transparent;"
+        "}"
+    );
+
+    m_loadingSpinner->hide();
+
+    m_errorLabel = new QLabel(
+        m_videoWidget
+    );
+
+    m_errorLabel->setStyleSheet(
+        "QLabel {"
+        "   color: #ff5555;"
+        "   background-color: rgba(0, 0, 0, 180);"
+        "   padding: 12px 20px;"
+        "   border-radius: 8px;"
+        "   font-weight: bold;"
+        "   font-size: 14px;"
+        "}"
+    );
+
+    m_errorLabel->hide();
+
+    videoOverlayLayout->addWidget(m_loadingSpinner);
+    videoOverlayLayout->addWidget(m_errorLabel);
+
+    m_mainLayout->addWidget(
+        m_videoWidget,
+        1
+    );
+
+    // ----------------------------------------
+    // Timeline
+    // ----------------------------------------
+
+    m_timeline = new QSlider(
+        Qt::Horizontal,
+        this
+    );
+
+    m_timeline->setRange(0, 1000);
+    m_timeline->setValue(0);
+
+    m_mainLayout->addWidget(
+        m_timeline
+    );
+
+    // ----------------------------------------
+    // Controles
+    // ----------------------------------------
+
+    m_controlsWidget = new QWidget(this);
+
+    m_controlsLayout = new QHBoxLayout(
+        m_controlsWidget
+    );
+
+    m_controlsLayout->setContentsMargins(
+        8,
+        4,
+        8,
+        4
+    );
+
+    m_currentTimeLabel = new QLabel(
+        "00:00",
+        this
+    );
+
+    m_durationLabel = new QLabel(
+        "00:00",
+        this
+    );
+
+    m_playButton = new QPushButton(this);
+    m_playButton->setIcon(
+        QIcon(":/resources/icons/play.svg")
+    );
+
+    m_stopButton = new QPushButton(this);
+    m_stopButton->setIcon(
+        QIcon(":/resources/icons/stop-circle.svg")
+    );
+
+    m_volumeButton = new QPushButton(this);
+
+    m_volumeButton->setIcon(
+        QIcon(":/resources/icons/volume-2.svg")
+    );
+
+    m_volumeSlider = new QSlider(
+        Qt::Horizontal,
+        this
+    );
+
+    m_volumeSlider->setRange(0, 100);
+    m_volumeSlider->setValue(100);
+    m_volumeSlider->setFixedWidth(100);
+    m_volumeSlider->setMouseTracking(true);
+    m_volumeSlider->hide();
+
+    m_volumeSlider->setStyleSheet(
+        "QSlider::groove:horizontal {"
+        "   border: none;"
+        "   height: 4px;"
+        "   background: #45475a;"
+        "   border-radius: 2px;"
+        "}"
+        "QSlider::sub-page:horizontal {"
+        "   background: #89b4fa;"
+        "   border-radius: 2px;"
+        "}"
+        "QSlider::handle:horizontal {"
+        "   background: #cdd6f4;"
+        "   border: none;"
+        "   width: 12px;"
+        "   height: 12px;"
+        "   margin: -4px 0;"
+        "   border-radius: 6px;"
+        "}"
+        "QSlider::handle:horizontal:hover {"
+        "   background: #ffffff;"
+        "}"
+    );
+
+    m_volumeButton->installEventFilter(this);
+    m_volumeSlider->installEventFilter(this);
+
+    // Botón de Audio
+    m_audioButton = new QPushButton(this);
+    m_audioButton->setIcon(QIcon(":/resources/icons/headphones.svg")); 
+    m_audioButton->setToolTip("Pistas de Audio");
+
+    m_audioMenu = new QMenu(this);
+    m_audioButton->setMenu(m_audioMenu);
+
+    // Botón de Subtítulos
+    m_subtitlesButton = new QPushButton(this);
+    m_subtitlesButton->setIcon(QIcon(":/resources/icons/message-square.svg"));
+    m_subtitlesButton->setToolTip("Subtítulos");
+
+    m_subtitlesMenu = new QMenu(this);
+    m_subtitlesButton->setMenu(m_subtitlesMenu);
+
+    m_fullscreenButton = new QPushButton(this);
+    m_fullscreenButton->setIcon(
+        QIcon(":/resources/icons/maximize.svg")
+    );
+
+    m_controlsLayout->addWidget(
+        m_currentTimeLabel
+    );
+
+    m_controlsLayout->addWidget(
+        m_playButton
+    );
+
+    m_controlsLayout->addWidget(
+        m_stopButton
+    );
+
+    m_controlsLayout->addWidget(
+        m_volumeButton
+    );
+
+    m_controlsLayout->addWidget(
+        m_volumeSlider
+    );
+
+    m_controlsLayout->addWidget(
+        m_audioButton
+    );
+
+    m_controlsLayout->addWidget(
+        m_subtitlesButton
+    );
+
+    m_controlsLayout->addWidget(
+        m_durationLabel
+    );
+
+    m_controlsLayout->addStretch();
+
+    m_controlsLayout->addWidget(
+        m_fullscreenButton
+    );
+
+    m_mainLayout->addWidget(
+        m_controlsWidget
+    );
 }
 
-void VideoPlayerWindow::togglePlayPause()
+void VideoPlayerWindow::setupConnections()
 {
-    if (!mpv)
-        return;
-
-    isPaused = !isPaused;
-    int pauseValue = isPaused ? 1 : 0;
-
-    int status = mpv_set_property(mpv, "pause", MPV_FORMAT_FLAG, &pauseValue);
-
-    if (status < 0) {
-        qWarning() << "[VideoPlayerWindow] No se pudo cambiar pause:" << mpv_error_string(status);
-        return;
-    }
-
-    btnPlayPause->setIcon(isPaused ? QIcon(":/resources/icons/play.svg") : QIcon(":/resources/icons/pause.svg"));
-    updateControls(true);
-}
-
-void VideoPlayerWindow::toggleFullScreen()
-{
-    QWidget* targetWindow = this->topLevelWidget();
-
-    bool goesFullScreen = !targetWindow->isFullScreen();
-
-    if (targetWindow->isFullScreen()) {
-        targetWindow->showNormal();
-        if (btnFullScreen) {
-            btnFullScreen->setIcon(QIcon(":/resources/icons/maximize.svg"));
+    connect(m_audioButton, &QPushButton::clicked, this, [this]() {
+        if (m_audioMenu && !m_audioMenu->isEmpty()) {
+            m_audioMenu->exec(m_audioButton->mapToGlobal(QPoint(0, -m_audioMenu->sizeHint().height())));
         }
-    } else {
-        targetWindow->showFullScreen();
-        if (btnFullScreen) {
-            btnFullScreen->setIcon(QIcon(":/resources/icons/minimize.svg"));
+    });
+
+    connect(m_subtitlesButton, &QPushButton::clicked, this, [this]() {
+        if (m_subtitlesMenu && !m_subtitlesMenu->isEmpty()) {
+            m_subtitlesMenu->exec(m_subtitlesButton->mapToGlobal(QPoint(0, -m_subtitlesMenu->sizeHint().height())));
         }
-    }
+    });
 
-    emit fullScreenToggled(goesFullScreen);
-}
-
-void VideoPlayerWindow::setVolume(int value)
-{
-    if (!mpv)
-        return;
-
-    volume = value;
-
-    if (value > 0) {
-        previousVolume = value;
-        isMuted = false;
-    }
-    else {
-        isMuted = true;
-    }
-
-    double mpvVolume = static_cast<double>(value);
-
-    const int status = mpv_set_property(
-        mpv,
-        "volume",
-        MPV_FORMAT_DOUBLE,
-        &mpvVolume
+    connect(
+        m_player,
+        &MpvPlayer::tracksChanged,
+        this,
+        &VideoPlayerWindow::updateTrackMenus
     );
 
-    if (status < 0) {
-        qWarning()
-            << "[VideoPlayerWindow] No se pudo cambiar volumen:"
-            << mpv_error_string(status);
-        return;
-    }
+    connect(
+        m_player,
+        &MpvPlayer::bufferingChanged,
+        this,
+        &VideoPlayerWindow::onBufferingChanged
+    );
 
-    updateVolumeIcon();
-}
+    connect(
+        m_player,
+        &MpvPlayer::playbackError,
+        this,
+        &VideoPlayerWindow::handlePlaybackError
+    );
 
-void VideoPlayerWindow::togleMute()
-{
-    isMuted = !isMuted;
+    connect(
+        m_player,
+        &MpvPlayer::positionChanged,
+        this,
+        &VideoPlayerWindow::updatePosition
+    );
 
-    if (isMuted) {
-        previousVolume = volume;
-        setVolume(0);
-    }
-    else {
-        setVolume(previousVolume > 0 ? previousVolume : 100);
-    }
+    connect(
+        m_player,
+        &MpvPlayer::durationChanged,
+        this,
+        &VideoPlayerWindow::updateDuration
+    );
 
-    sliderVolume->setValue(volume);
-}
+    connect(
+        m_playButton,
+        &QPushButton::clicked,
+        this,
+        &VideoPlayerWindow::togglePlayPause
+    );
 
-void VideoPlayerWindow::updateVolumeIcon()
-{
-    QString iconPath;
+    connect(
+        m_stopButton,
+        &QPushButton::clicked,
+        this,
+        &VideoPlayerWindow::stop
+    );
 
-    if (volume <= 0 || isMuted) {
-        iconPath = ":/resources/icons/volume-x.svg";
-    }
-    else if (volume <= 10) {
-        iconPath = ":/resources/icons/volume.svg";
-    }
-    else if (volume <= 60) {
-        iconPath = ":/resources/icons/volume-1.svg";
-    }
-	else{
-		iconPath = ":/resources/icons/volume-2.svg";
-	}
+    connect(
+        m_volumeButton,
+        &QPushButton::clicked,
+        this,
+        &VideoPlayerWindow::toggleMute
+    );
 
-    btnVolume->setIcon(QIcon(iconPath));
-}
+    connect(
+        m_fullscreenButton,
+        &QPushButton::clicked,
+        this,
+        &VideoPlayerWindow::toggleFullscreen
+    );
 
-void VideoPlayerWindow::updateControls(bool show)
-{
-    if (!controlsContainer)
-        return;
+    connect(
+        m_volumeSlider,
+        &QSlider::valueChanged,
+        this,
+        [this](int value)
+        {
+            if (!m_player)
+                return;
 
-    if (show) {
-        controlsContainer->show();
+            m_player->setVolume(
+                static_cast<double>(value)
+            );
 
-        if (controlsTimer && !controlsContainer->underMouse())
-            controlsTimer->start(3000);
+            updateVolumeIcon(value);
+        }
+    );
 
-        return;
-    }
+    connect(
+        m_player,
+        &MpvPlayer::muteChanged,
+        this,
+        [this](bool muted)
+        {
+            if (muted) {
 
-    if (controlsTimer)
-        controlsTimer->stop();
+                m_volumeButton->setIcon(
+                    QIcon(":/resources/icons/volume-x.svg")
+                );
 
-    controlsContainer->hide();
+            } else {
+
+                const double currentVol =
+                    m_player->volume();
+
+                updateVolumeIcon(currentVol);
+            }
+        }
+    );
+
+    connect(
+        m_timeline,
+        &QSlider::sliderReleased,
+        this,
+        [this]()
+        {
+            if (!m_player)
+                return;
+
+            const double duration =
+                m_player->duration();
+
+            if (duration <= 0.0)
+                return;
+
+            const double position =
+                duration * m_timeline->value() / 1000.0;
+
+            m_player->seek(position);
+        }
+    );
 }
 
 bool VideoPlayerWindow::eventFilter(QObject* watched, QEvent* event)
 {
-    switch (event->type()) {
-
-    case QEvent::Enter:
-    case QEvent::MouseMove:
-    case QEvent::MouseButtonPress:
-        updateControls(true);
-        break;
-
-    default:
-        break;
+    if (m_isFullscreen && event->type() == QEvent::MouseMove) {
+        resetControlsHideTimer();
     }
 
-    if (watched == controlsContainer) {
+    // Desplegar el slider de volumen al pasar el ratón por el botón
+    if (watched == m_volumeButton) {
         if (event->type() == QEvent::Enter) {
-            // Cancelar la ocultación automática mientras el usuario navega sobre los botones
-            if (controlsTimer)
-                controlsTimer->stop();
-            updateControls(true);
-            return QWidget::eventFilter(watched, event);
-        }
-        else if (event->type() == QEvent::Leave) {
-            // Reiniciar la cuenta regresiva al salir del área de controles
-            if (controlsTimer)
-                controlsTimer->start(3000);
-            return QWidget::eventFilter(watched, event);
+            m_volumeSlider->show();
+        } else if (event->type() == QEvent::Leave) {
+            // Dar un pequeño retraso para permitir mover el ratón hacia el slider
+            QTimer::singleShot(200, this, [this]() {
+                if (!m_volumeButton->underMouse() && !m_volumeSlider->underMouse()) {
+                    m_volumeSlider->hide();
+                }
+            });
         }
     }
 
-    if (watched == btnVolume && event->type() == QEvent::Enter) {
-        sliderVolume->show();
-    }
-
-    if (watched == volumeContainer && event->type() == QEvent::Leave) {
-        const QPoint pos =
-            volumeContainer->mapFromGlobal(QCursor::pos());
-
-        if (!volumeContainer->rect().contains(pos)) {
-            sliderVolume->hide();
+    // Mantener visible mientras se esté interactuando con el slider
+    if (watched == m_volumeSlider && event->type() == QEvent::Leave) {
+        if (!m_volumeButton->underMouse()) {
+            m_volumeSlider->hide();
         }
     }
 
     return QWidget::eventFilter(watched, event);
 }
 
-void VideoPlayerWindow::playMedia(const QString& url)
+void VideoPlayerWindow::setTrackControlsVisible(bool visible)
 {
-    if (!mpv) {
-        qWarning() << "[VideoPlayerWindow] No se puede reproducir: la instancia MPV no existe.";
-        return;
-    }
+    if (m_audioButton)
+        m_audioButton->setVisible(visible);
 
-    qDebug() << "[VideoPlayerWindow] Enviando orden de reproducción para URL:" << url;
-
-    isPaused = false;
-    int pauseValue = 0;
-    mpv_set_property(mpv, "pause", MPV_FORMAT_FLAG, &pauseValue);
-
-
-    buffering = true;
-    cacheDuration = 0.0;
-    setLoadingSpinnerVisible(true);
-    QByteArray urlData = url.toUtf8();
-
-    const char* cmd[] = {
-        "loadfile",
-        urlData.constData(),
-        "replace",
-        nullptr
-    };
-
-    int status = mpv_command_async(mpv, 0, cmd);
-
-    if (status < 0) {
-        qCritical() << "[VideoPlayerWindow] Error enviando el comando a mpv:" << status << mpv_error_string(status);
-    }
-
-    isPaused = false;
-	btnPlayPause->setIcon(QIcon(":/resources/icons/pause.svg"));
+    if (m_subtitlesButton)
+        m_subtitlesButton->setVisible(visible);
 }
 
-void VideoPlayerWindow::onMpvEvents()
+void VideoPlayerWindow::updateTrackMenus()
 {
-    if (!mpv)
+    if (!m_player)
         return;
 
-    while (true) {
-        mpv_event* event = mpv_wait_event(mpv, 0);
+    m_audioMenu->clear();
+    m_subtitlesMenu->clear();
 
-        if (!event || event->event_id == MPV_EVENT_NONE)
-            break;
+    const QList<TrackInfo> tracks = m_player->availableTracks();
 
-        switch (event->event_id) {
+    // Opción para desactivar subtítulos
+    QAction* disableSubAction = m_subtitlesMenu->addAction("Desactivados");
+    disableSubAction->setCheckable(true);
+    connect(disableSubAction, &QAction::triggered, this, [this]() {
+        m_player->setSubtitleTrack(0);
+    });
 
-        case MPV_EVENT_PROPERTY_CHANGE:
-        {
-            auto* prop = static_cast<mpv_event_property*>(event->data);
+    bool anySubSelected = false;
 
-            if (!prop || !prop->name)
-                break;
+    for (const TrackInfo& track : tracks) {
+        QString label = QString("[%1] %2").arg(
+            track.lang.isEmpty() ? "und" : track.lang.toUpper(),
+            track.title.isEmpty() ? (track.type == "audio" ? "Audio" : "Subtítulo") : track.title
+        );
 
-            if (strcmp(prop->name, "demuxer-cache-duration") == 0) {
+        if (track.type == "audio") {
+            QAction* action = m_audioMenu->addAction(label);
+            action->setCheckable(true);
+            action->setChecked(track.selected);
+            connect(action, &QAction::triggered, this, [this, track]() {
+                m_player->setAudioTrack(track.id);
+            });
+        } else if (track.type == "sub") {
+            QAction* action = m_subtitlesMenu->addAction(label);
+            action->setCheckable(true);
+            action->setChecked(track.selected);
+            if (track.selected)
+                anySubSelected = true;
 
-                if (prop->format == MPV_FORMAT_DOUBLE && prop->data) {
-                    cacheDuration = *static_cast<double*>(prop->data);
-
-                    //qDebug() << "[MPV] Cache:"
-                     //       << cacheDuration
-                       //     << "segundos";
-
-                    updateBufferingState();
-                }
-            }
-            else if (strcmp(prop->name, "paused") == 0) {
-
-                if (prop->format == MPV_FORMAT_FLAG && prop->data) {
-                    isPaused = *static_cast<int*>(prop->data);
-
-                    updateBufferingState();
-                }
-            }
-
-            else if (strcmp(prop->name, "core-idle") == 0) {
-                if (prop->format == MPV_FORMAT_FLAG && prop->data) {
-                    bool isIdle = *static_cast<int*>(prop->data);
-                    
-                    // Si mpv entra en idle durante la carga, forzamos la visibilidad del spinner
-                    if (isIdle && !isPaused) {
-                        buffering = true;
-                        setLoadingSpinnerVisible(true);
-                    }
-                }
-            }
-
-            break;
-        }
-        
-        // Si el archivo empieza a reproducirse correctamente
-        case MPV_EVENT_PLAYBACK_RESTART:
-        {
-            // El video ha comenzado a emitir frames, si ya tenemos buffer razonable oculta el spinner
-            if (cacheDuration >= 1.0) {
-                buffering = false;
-                setLoadingSpinnerVisible(false);
-            }
-            break;
-        }
-
-        case MPV_EVENT_LOG_MESSAGE:
-        {
-            auto* msg = static_cast<mpv_event_log_message*>(event->data);
-
-            if (msg && msg->text) {
-                QString text = QString::fromUtf8(msg->text).trimmed();
-
-                if (!text.isEmpty()) {
-                    qDebug() << "[MPV]" << msg->prefix << ":" << text;
-                }
-            }
-            break;
-        }
-
-        case MPV_EVENT_END_FILE:
-        {
-            auto* eef = static_cast<mpv_event_end_file*>(event->data);
-
-            if (eef) {
-                qDebug() << "[MPV] Fin de reproducción. Razón:" << eef->reason << "| Error:" << eef->error;
-            }
-            break;
-        }
-
-        default:
-            break;
+            connect(action, &QAction::triggered, this, [this, track]() {
+                m_player->setSubtitleTrack(track.id);
+            });
         }
     }
+
+    disableSubAction->setChecked(!anySubSelected);
 }
 
-void VideoPlayerWindow::stopMedia()
+void VideoPlayerWindow::resetControlsHideTimer()
 {
-    if (!mpv)
+    if (!m_isFullscreen)
         return;
 
-    qDebug() << "[VideoPlayerWindow] Deteniendo reproducción...";
+    m_controlsWidget->show();
 
-    const char* cmd[] = {
-        "stop",
-        nullptr
-    };
-
-    int status = mpv_command(mpv, cmd);
-
-    if (status < 0) {
-        qWarning() << "[VideoPlayerWindow] Error deteniendo MPV:" << mpv_error_string(status);
-    }
-
-    isPaused = false;
-	btnPlayPause->setIcon(QIcon(":/resources/icons/play.svg"));
+    m_controlsHideTimer->start(2500);
 }
 
-void VideoPlayerWindow::updateBufferingState()
+void VideoPlayerWindow::play(const QString& url)
 {
-    if (!mpv)
+    if (!m_player)
         return;
 
-    if (isPaused && cacheDuration > 0.0) {
-        if (buffering) {
-            buffering = false;
-            setLoadingSpinnerVisible(false);
-        }
+    if (url.isEmpty())
         return;
+
+    if (m_errorLabel) {
+        m_errorLabel->hide();
     }
 
-
-    if (buffering && cacheDuration >= 2.0) {
-        buffering = false;
-        setLoadingSpinnerVisible(false);
+    if (m_loadingSpinner) {
+        m_loadingSpinner->show();
+        m_loadingSpinner->raise(); // Asegura que se renderice sobre la superficie de mpv
     }
 
-    else if (!buffering && cacheDuration < 0.5 && !isPaused) {
-        buffering = true;
-        setLoadingSpinnerVisible(true);
-    }
+    m_player->play(url);
+
+    m_isPlaying = true;
+
+    m_playButton->setIcon(
+        QIcon(":/resources/icons/pause.svg")
+    );
+
+    QTimer::singleShot(1000, this, &VideoPlayerWindow::updateTrackMenus);
 }
 
-void VideoPlayerWindow::resizeEvent(QResizeEvent* event)
+void VideoPlayerWindow::pause()
 {
-    QWidget::resizeEvent(event);
-
-    if (!videoContainer || !loadingOverlay || !loadingSpinner)
+    if (!m_player)
         return;
 
-    loadingOverlay->setGeometry(videoContainer->rect());
+    m_player->pause();
 
-    loadingSpinner->move(
-        (loadingOverlay->width() - loadingSpinner->width()) / 2,
-        (loadingOverlay->height() - loadingSpinner->height()) / 2
+    m_isPlaying = false;
+
+    m_playButton->setIcon(
+        QIcon(":/resources/icons/play.svg")
     );
 }
 
-void VideoPlayerWindow::setLoadingSpinnerVisible(bool visible)
+void VideoPlayerWindow::stop()
 {
-    if (visible) {
-        loadingOverlay->setGeometry(videoContainer->rect());
+    if (!m_player)
+        return;
 
-        loadingSpinner->move(
-            (loadingOverlay->width() - loadingSpinner->width()) / 2,
-            (loadingOverlay->height() - loadingSpinner->height()) / 2
-        );
+    m_player->stop();
 
-        loadingOverlay->show();
-        loadingOverlay->raise();
+    m_isPlaying = false;
 
-        spinnerTimer->start(50);
-    }
-    else {
-        spinnerTimer->stop();
-        loadingOverlay->hide();
-    }
-}
-
-void VideoPlayerWindow::setupLoadingSpinner()
-{
-    loadingOverlay = new QWidget(videoContainer);
-
-    loadingOverlay->setAttribute(Qt::WA_TransparentForMouseEvents);
-    loadingOverlay->setStyleSheet(
-        "#loadingOverlay {"
-        "    background: transparent;"
-        "}"
+    m_playButton->setIcon(
+        QIcon(":/resources/icons/play.svg")
     );
 
-    loadingSpinner = new LoadingSpinner(loadingOverlay);
+    m_timeline->setValue(0);
 
-    spinnerAngle = 0;
-
-    spinnerTimer = new QTimer(this);
-
-    connect(spinnerTimer, &QTimer::timeout,
-            this, &VideoPlayerWindow::updateSpinner);
-
-    loadingOverlay->hide();
+    if (m_errorLabel) {
+        m_errorLabel->hide();
+    }
 }
 
-LoadingSpinner::LoadingSpinner(QWidget* parent)
-    : QWidget(parent)
+void VideoPlayerWindow::togglePlayPause()
 {
-    setAttribute(Qt::WA_TransparentForMouseEvents);
-    setFixedSize(60, 60);
+    if (!m_player)
+        return;
+
+    if (m_isPlaying) {
+        pause();
+    } else {
+        m_player->resume();
+
+        m_isPlaying = true;
+
+        m_playButton->setIcon(
+            QIcon(":/resources/icons/pause.svg")
+        );
+    }
 }
 
-void VideoPlayerWindow::updateSpinner()
+void VideoPlayerWindow::toggleMute()
 {
-    spinnerAngle += 45;
+    if (!m_player)
+        return;
 
-    if (spinnerAngle >= 360)
-        spinnerAngle = 0;
+    const bool newMutedState = !m_player->isMuted();
+    m_player->setMuted(newMutedState);
 
-    loadingSpinner->setAngle(spinnerAngle);
+    if (newMutedState) {
+        m_volumeButton->setIcon(QIcon(":/resources/icons/volume-x.svg"));
+    } else {
+        updateVolumeIcon(m_player->volume());
+    }
 }
 
-void LoadingSpinner::setAngle(int value)
+void VideoPlayerWindow::toggleFullscreen()
 {
-    angle = value;
-    update();
+    if (m_isFullscreen) {
+        m_controlsHideTimer->stop();
+        m_controlsWidget->show();
+
+        // Salir del modo pantalla completa devolviendo el widget a su estado normal dentro de la UI
+        setWindowFlags(Qt::Widget);
+        showNormal();
+
+        m_isFullscreen = false;
+        m_fullscreenButton->setIcon(QIcon(":/resources/icons/maximize.svg"));
+
+    } else {
+        // Desvincular temporalmente del padre para tomar toda la pantalla
+        setWindowFlags(Qt::Window);
+        showFullScreen();
+
+        m_isFullscreen = true;
+        m_fullscreenButton->setIcon(QIcon(":/resources/icons/minimize.svg"));
+
+        resetControlsHideTimer();
+    }
 }
 
-void LoadingSpinner::paintEvent(QPaintEvent*)
+void VideoPlayerWindow::updateVolumeIcon(double volume)
 {
-    QPainter painter(this);
+    if (m_player && m_player->isMuted()) {
 
-    painter.setRenderHint(QPainter::Antialiasing);
-
-    const QPointF center = rect().center();
-
-    painter.translate(center);
-    painter.rotate(angle);
-
-    const int radius = 20;
-    const int lineWidth = 4;
-
-    for (int i = 0; i < 8; ++i) {
-        painter.save();
-
-        painter.rotate(i * 45);
-
-        int alpha = 40 + (i * 25);
-
-        QPen pen;
-        pen.setWidth(lineWidth);
-        pen.setCapStyle(Qt::RoundCap);
-        pen.setColor(QColor(255, 255, 255, alpha));
-
-        painter.setPen(pen);
-
-        painter.drawLine(
-            0,
-            -radius + 5,
-            0,
-            -radius + 12
+        m_volumeButton->setIcon(
+            QIcon(":/resources/icons/volume-x.svg")
         );
 
-        painter.restore();
+        return;
     }
+
+    if (volume <= 0.0) {
+
+        m_volumeButton->setIcon(
+            QIcon(":/resources/icons/volume-x.svg")
+        );
+
+    } else if (volume < 10.0) {
+
+        m_volumeButton->setIcon(
+            QIcon(":/resources/icons/volume.svg")
+        );
+
+    } else if (volume < 60.0) {
+
+        m_volumeButton->setIcon(
+            QIcon(":/resources/icons/volume-1.svg")
+        );
+
+    } else {
+
+        m_volumeButton->setIcon(
+            QIcon(":/resources/icons/volume-2.svg")
+        );
+
+    }
+}
+
+void VideoPlayerWindow::updatePosition(double position)
+{
+    if (!m_player)
+        return;
+
+    const double duration = m_player->duration();
+
+    if (duration <= 0.0) {
+        m_currentTimeLabel->setText("EN VIVO");
+        m_timeline->setEnabled(false);
+        return;
+    }
+
+    m_timeline->setEnabled(true);
+
+    if (!m_timeline->isSliderDown()) {
+        const int sliderValue = static_cast<int>(
+            (position / duration) * 1000.0
+        );
+
+        m_timeline->setValue(sliderValue);
+    }
+
+    const int totalSeconds =
+        static_cast<int>(position);
+
+    const int minutes =
+        totalSeconds / 60;
+
+    const int seconds =
+        totalSeconds % 60;
+
+    m_currentTimeLabel->setText(
+        QString("%1:%2")
+            .arg(minutes, 2, 10, QChar('0'))
+            .arg(seconds, 2, 10, QChar('0'))
+    );
+}
+
+void VideoPlayerWindow::updateDuration(double duration)
+{
+    if (duration <= 0.0) {
+
+        m_durationLabel->setText("LIVE");
+        m_timeline->setEnabled(false);
+        m_currentTimeLabel->setText("EN VIVO");
+
+        return;
+    }
+
+    m_timeline->setEnabled(true);
+
+    const int totalSeconds =
+        static_cast<int>(duration);
+
+    const int minutes =
+        totalSeconds / 60;
+
+    const int seconds =
+        totalSeconds % 60;
+
+    m_durationLabel->setText(
+        QString("%1:%2")
+            .arg(minutes, 2, 10, QChar('0'))
+            .arg(seconds, 2, 10, QChar('0'))
+    );
 }
