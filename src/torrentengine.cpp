@@ -349,14 +349,12 @@ void TorrentEngine::prioritizeStreamingPieces()
     const auto firstPiece = first.piece;
     const auto lastPiece = last.piece;
 
-    qDebug() << "[TorrentEngine] Rango de vídeo:"
-             << static_cast<int>(firstPiece) << "->" << static_cast<int>(lastPiece);
-
     m_handle.set_sequential_range(firstPiece, lastPiece);
 
-    constexpr int START_PIECES = 8;
+    constexpr int START_PIECES = 10;
+    constexpr int END_PIECES = 10;
 
-    // Prioridad máxima a las primeras piezas
+    // Prioridad máxima a las primeras piezas (Cabezal)
     for (int i = 0; i < START_PIECES; ++i) {
         const auto piece = firstPiece + libtorrent::piece_index_t::diff_type(i);
         if (piece <= lastPiece) {
@@ -364,10 +362,10 @@ void TorrentEngine::prioritizeStreamingPieces()
         }
     }
 
-    // Prioridad alta a las piezas subsecuentes
-    for (int i = 0; i < START_PIECES; ++i) {
-        const auto piece = firstPiece + libtorrent::piece_index_t::diff_type(START_PIECES + i);
-        if (piece <= lastPiece) {
+    // Prioridad máxima a las últimas piezas (Índice de video / Cues)
+    for (int i = 0; i < END_PIECES; ++i) {
+        const auto piece = lastPiece - libtorrent::piece_index_t::diff_type(i);
+        if (piece >= firstPiece) {
             m_handle.piece_priority(piece, libtorrent::top_priority);
         }
     }
@@ -575,9 +573,15 @@ void TorrentEngine::onNewHttpConnection()
         QTcpSocket* socket = m_httpServer->nextPendingConnection();
         if (!socket) continue;
 
+        // Detener el streaming activo antes de asignar la nueva conexión
+        m_streamTimer->stop();
+        m_streaming = false;
+
         if (m_clientSocket) {
-            m_clientSocket->disconnectFromHost();
+            m_clientSocket->disconnect();
+            m_clientSocket->abort();
             m_clientSocket->deleteLater();
+            m_clientSocket = nullptr;
         }
 
         m_clientSocket = socket;
@@ -585,14 +589,14 @@ void TorrentEngine::onNewHttpConnection()
 
         connect(m_clientSocket, &QTcpSocket::readyRead, this, &TorrentEngine::onHttpReadyRead);
         connect(m_clientSocket, &QTcpSocket::disconnected, this, [this]() {
+            stopStreaming();
             if (m_clientSocket) {
                 m_clientSocket->deleteLater();
                 m_clientSocket = nullptr;
             }
-            stopStreaming();
         });
 
-        qDebug() << "[TorrentEngine HTTP] Nueva conexión.";
+        qDebug() << "[TorrentEngine HTTP] Nueva conexión aceptada.";
     }
 }
 
@@ -686,20 +690,19 @@ void TorrentEngine::stopStreaming()
 
 void TorrentEngine::sendNextStreamChunk()
 {
-    if (!m_streaming || !m_clientSocket || !m_clientSocket->isOpen() || !m_handle.is_valid()) {
+    if (!m_streaming || !m_clientSocket || m_clientSocket->state() != QAbstractSocket::ConnectedState || !m_handle.is_valid()) {
+        stopStreaming();
         return;
     }
 
     if (m_streamPosition > m_streamEnd) {
         qDebug() << "[TorrentEngine HTTP] Streaming terminado.";
-        m_streamTimer->stop();
-        m_streaming = false;
+        stopStreaming();
         return;
     }
 
-    // Evitar saturar el buffer de escritura del socket
-    if (m_clientSocket->bytesToWrite() > 4 * 1024 * 1024) {
-        return;
+    if (m_clientSocket->bytesToWrite() > 2 * 1024 * 1024) {
+        return; // Esperar a que el buffer del cliente se vacíe
     }
 
     auto info = m_handle.torrent_file();

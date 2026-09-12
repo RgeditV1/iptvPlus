@@ -69,8 +69,6 @@ private:
     QTimer* m_statusTimer = nullptr;
     QTimer* m_streamTimer = nullptr;
     QTimer* m_timeoutTimer = nullptr;
-    
-    static constexpr int64_t MIN_BUFFER_BYTES = 10 * 1024 * 1024; // 10 MB mínimos
 
     // Streaming & File handling
     QFile m_streamFile;

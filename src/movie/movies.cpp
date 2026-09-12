@@ -120,10 +120,44 @@ void MoviesWidget::setupUi()
     mainLayout->addWidget(m_scrollArea, 1);
 }
 
+#if 0 // en testeo
+void MoviesWidget::clearDB()
+{
+    const QString appDir = QCoreApplication::applicationDirPath();
+    const QString scrapPath = QDir(appDir).filePath("scrap.exe");
+
+    if (!QFileInfo::exists(scrapPath)) {
+        qWarning() << "[MoviesWidget] ERROR: No se encontró scrap.exe en:" << scrapPath;
+        return;
+    }
+
+    if (m_scrapProcess->state() != QProcess::NotRunning) {
+        m_scrapProcess->kill();
+        m_scrapProcess->waitForFinished();
+    }
+
+    QStringList args;
+    args << "--clear-db";
+
+    connect(m_scrapProcess, &QProcess::errorOccurred, this, [this](QProcess::ProcessError error) {
+        qWarning() << "[MoviesWidget] Error al ejecutar scrap.exe:" << error;
+        m_loadingBar->hide();
+        m_searchButton->setEnabled(true);
+    });
+
+    m_scrapProcess->setProgram(scrapPath);
+    m_scrapProcess->setArguments(args);
+    m_scrapProcess->start();
+}
+#endif
+
 void MoviesWidget::onSearchClicked()
 {
+    
     const QString query = m_searchLineEdit->text().trimmed();
     if (query.isEmpty()) return;
+
+    m_currentSearchQuery = query;
 
     const QString appDir = QCoreApplication::applicationDirPath();
     const QString scrapPath = QDir(appDir).filePath("scrap.exe");
@@ -179,7 +213,7 @@ void MoviesWidget::loadMoviesFromDatabase()
         delete child;
     }
 
-    const auto movies = DatabaseManager::instance().getSavedMovies(20, 0);
+    const auto movies = DatabaseManager::instance().getSavedMovies(20, 0,  m_currentSearchQuery);
 
     int columns = 5;
     int row = 0;

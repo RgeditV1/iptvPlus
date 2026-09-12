@@ -64,46 +64,63 @@ bool DatabaseManager::isConnected() const
     return m_connected && m_db.isOpen();
 }
 
-QList<MovieItem> DatabaseManager::getSavedMovies(int limit, int offset)
+QList<MovieItem> DatabaseManager::getSavedMovies(int limit, int offset, const QString& searchTerm)
 {
     QList<MovieItem> movies;
-    if (!isConnected()) return movies;
+    if (!isConnected()) {
+        return movies;
+    }
+
+    const QString trimmedSearch = searchTerm.trimmed();
+    const bool hasSearch = !trimmedSearch.isEmpty();
+
+    QString sql = R"(
+        SELECT id, title, type, url, poster, description, release_year, rating, trailer
+        FROM media
+        WHERE type = 'movie'
+    )";
+
+    if (hasSearch) {
+        sql += " AND title LIKE :search";
+    }
+    sql += " ORDER BY created_at DESC LIMIT :limit OFFSET :offset";
 
     QSqlQuery query(m_db);
-    query.prepare(R"(
-        SELECT id, title, type, url, poster, description, release_year, rating, trailer 
-        FROM media 
-        WHERE type = 'movie' 
-        ORDER BY created_at DESC 
-        LIMIT :limit OFFSET :offset
-    )");
+    query.prepare(sql);
+
+    if (hasSearch) {
+        query.bindValue(":search", QString("%%1%").arg(trimmedSearch));
+    }
     query.bindValue(":limit", limit);
     query.bindValue(":offset", offset);
 
     if (!query.exec()) {
-        qWarning() << "Error consultando películas:" << query.lastError().text();
+        qWarning() << "[DatabaseManager] Error consultando películas:" << query.lastError().text();
         return movies;
     }
 
+    // Pre-compilamos la consulta de géneros para reutilizarla eficientemente en el bucle (N+1)
+    QSqlQuery genreQuery(m_db);
+    genreQuery.prepare(R"(
+        SELECT g.name
+        FROM genres g
+        INNER JOIN media_genres mg ON g.id = mg.genre_id
+        WHERE mg.media_id = :media_id
+    )");
+
     while (query.next()) {
         MovieItem item;
-        item.id = query.value("id").toInt();
-        item.title = query.value("title").toString();
-        item.type = query.value("type").toString();
-        item.url = query.value("url").toString();
-        item.poster = query.value("poster").toString();
+        item.id          = query.value("id").toInt();
+        item.title       = query.value("title").toString();
+        item.type        = query.value("type").toString();
+        item.url         = query.value("url").toString();
+        item.poster      = query.value("poster").toString();
         item.description = query.value("description").toString();
         item.releaseYear = query.value("release_year").toInt();
-        item.rating = query.value("rating").toDouble();
-        item.trailer = query.value("trailer").toString();
+        item.rating      = query.value("rating").toDouble();
+        item.trailer     = query.value("trailer").toString();
 
-        // Obtener géneros asociados a la película
-        QSqlQuery genreQuery(m_db);
-        genreQuery.prepare(R"(
-            SELECT g.name FROM genres g
-            JOIN media_genres mg ON g.id = mg.genre_id
-            WHERE mg.media_id = :media_id
-        )");
+        // Cargar géneros asociados
         genreQuery.bindValue(":media_id", item.id);
         if (genreQuery.exec()) {
             while (genreQuery.next()) {
@@ -111,11 +128,15 @@ QList<MovieItem> DatabaseManager::getSavedMovies(int limit, int offset)
             }
         }
 
-        // Obtener los streams (magnet URLs) asociados
+        // Cargar streams
         item.streams = getStreamsForMedia(item.id);
 
         movies.append(item);
     }
+
+    qDebug() << "[DatabaseManager] getSavedMovies:"
+             << "query =" << searchTerm
+             << "resultados =" << movies.size();
 
     return movies;
 }
