@@ -35,7 +35,7 @@ public:
     bool isConnected() const;
 
     
-    QList<MovieItem> getSavedMovies(int limit = 50, int offset = 0);
+    QList<MovieItem> getSavedMovies(int limit = 50, int offset = 0, const QString& searchTerm = QString());
     MovieItem getMovieById(int movieId);
     QList<StreamInfo> getStreamsForMedia(int mediaId, const QString& targetLang = QString());
 

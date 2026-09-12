@@ -39,7 +39,11 @@ private slots:
 
 private:
     void setupUi();
+    void clearDB();
+
     QWidget* createMovieCard(const MovieItem& movie);
+
+    QString m_currentSearchQuery;
 
     QLineEdit* m_searchLineEdit{nullptr};
     QPushButton* m_searchButton{nullptr};
