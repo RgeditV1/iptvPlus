@@ -5,7 +5,7 @@ on:
     branches:
       - main
     tags:
-      - 'v*'
+      - "v*"
 
   pull_request:
 
@@ -19,14 +19,12 @@ jobs:
     runs-on: windows-2025
 
     steps:
-
       # ============================================================
       # Checkout
       # ============================================================
 
       - name: Checkout
         uses: actions/checkout@v4
-
 
       # ============================================================
       # Python
@@ -35,8 +33,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v6
         with:
-          python-version: '3.12'
-
+          python-version: "3.12"
 
       # ============================================================
       # System Dependencies
@@ -53,7 +50,6 @@ jobs:
               Write-Error "No se pudieron instalar las dependencias del sistema."
               exit $LASTEXITCODE
           }
-
 
       # ============================================================
       # vcpkg
@@ -91,7 +87,6 @@ jobs:
 
           .\vcpkg.exe version
 
-
       # ============================================================
       # vcpkg triplet
       # ============================================================
@@ -120,7 +115,6 @@ jobs:
 
           Write-Host ""
           Write-Host "Dependencias instaladas correctamente."
-
 
       # ============================================================
       # Extraer libmpv
@@ -168,7 +162,6 @@ jobs:
           Write-Host "Contenido después de extraer:"
           Get-ChildItem $mpvDir -Recurse
 
-
       # ============================================================
       # Cache Qt
       # ============================================================
@@ -179,7 +172,6 @@ jobs:
         with:
           path: ${{ github.workspace }}\Qt
           key: qt-6.11.2-windows-msvc2022-x64
-
 
       # ============================================================
       # Instalar Qt
@@ -202,7 +194,6 @@ jobs:
               Write-Error "Falló la instalación de Qt."
               exit $LASTEXITCODE
           }
-
 
       # ============================================================
       # Localizar Qt6Config.cmake
@@ -243,7 +234,6 @@ jobs:
 
           "QT6_DIR=$qtCmakeDir" >> $env:GITHUB_ENV
 
-
       # ============================================================
       # Verificar Qt
       # ============================================================
@@ -261,7 +251,6 @@ jobs:
 
           Write-Host ""
           Write-Host "Qt6Config.cmake encontrado correctamente."
-
 
       # ============================================================
       # Verificar CMake / Visual Studio
@@ -288,7 +277,17 @@ jobs:
             -latest `
             -products * `
             -property installationPath
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          if (!(Test-Path $vswhere)) {
+              $vswhere = "${env:ProgramFiles}\Microsoft Visual Studio\Installer\vswhere.exe"
+          }
 
+          if (Test-Path $vswhere) {
+              & $vswhere -latest -products * -property installationPath
+          } else {
+              Write-Error "No se encontró vswhere.exe en ninguna de las rutas esperadas."
+              exit 1
+          }
 
       # ============================================================
       # Configure CMake
@@ -314,7 +313,6 @@ jobs:
               exit $LASTEXITCODE
           }
 
-
       # ============================================================
       # Build
       # ============================================================
@@ -334,7 +332,6 @@ jobs:
               Write-Error "Falló la compilación."
               exit $LASTEXITCODE
           }
-
 
       # ============================================================
       # Install
@@ -359,7 +356,6 @@ jobs:
           Get-ChildItem `
             "${{ github.workspace }}\build\install" `
             -Recurse
-
 
       # ============================================================
       # CPack
@@ -400,7 +396,6 @@ jobs:
               Write-Host $_.FullName
           }
 
-
       # ============================================================
       # CHANGELOG
       # ============================================================
@@ -419,7 +414,6 @@ jobs:
           else {
               "content=Release ${{ github.ref_name }}" >> $env:GITHUB_OUTPUT
           }
-
 
       # ============================================================
       # GitHub Release
