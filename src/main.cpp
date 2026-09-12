@@ -56,7 +56,7 @@ int main(int argc, char* argv[])
     std::signal(SIGTERM, signalHandler);
 
     // Activar el log handler
-    qInstallMessageHandler(customLogHandler);
+    //qInstallMessageHandler(customLogHandler);
 
     qDebug() << "========================================";
     qDebug() << "Iniciando iptvPlus...";

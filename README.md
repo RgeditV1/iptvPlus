@@ -2,7 +2,7 @@
 
 Video Player for ```.m3u``` Files and Movies, Series is Coming Soon
 
-![screenshoot](/screenshoot.png "IPTV ++ Screenshoot")
+![screenshoot](/screenshoot.png "IPTV ++ Screenshoot") ![screenshoot](/screenshoot2.png "IPTV ++ Screenshoot")
 
 ### Build
 

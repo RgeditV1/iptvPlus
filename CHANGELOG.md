@@ -5,12 +5,13 @@
 ### Cambio
 
 - Rework de la GUI completa y reestructuracion del programa
-- seccion de pelicula y busqueda añadida
+- seccion de pelicula y busqueda añadida (Experimental)
 - Titulo de la ventana principal
 
 ### Añadido
 - Icono de Aplicacion
-- Selector de Magnets
+- Selector de Magnets (Experimental)
+- Selector de Pista de Audio y Subtitulos (Experimental)
 
 ## [0.1.2]
 
