@@ -25,6 +25,8 @@ cpack --config build/CPackConfig.cmake -C Release
 
 ### 3rdpartys
 
+All deps using vcpkg must be installed using x64-windows-static-md triplet
+
 - ``mpv`` (videoplayer)
 - ``libtorrent`` (should use vcpkg)
 - ``vcpkg`` for lib magnaments (optional but recomended)
