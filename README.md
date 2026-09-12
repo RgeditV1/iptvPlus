@@ -1,4 +1,5 @@
-# iptvPlus
+[![Build Windows 🪟](https://github.com/RgeditV1/iptvPlus/actions/workflows/build.yml/badge.svg)](https://github.com/RgeditV1/iptvPlus/actions/workflows/build.yml)
+
 Video Player for ```.m3u``` Files and Movies, Series is Coming Soon
 
 ![screenshoot](/screenshoot.png "IPTV ++ Screenshoot")
@@ -25,7 +26,7 @@ cpack --config build/CPackConfig.cmake -C Release
 
 ### 3rdpartys
 
-All deps using vcpkg must be installed using x64-windows-static-md triplet
+All deps using vcpkg must be installed using ``x64-windows-static-md triplet``
 
 - ``mpv`` (videoplayer)
 - ``libtorrent`` (should use vcpkg)

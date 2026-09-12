@@ -37,7 +37,14 @@ find_package(Qt6 REQUIRED COMPONENTS
 
 find_package(Boost REQUIRED COMPONENTS system)
 find_package(OpenSSL REQUIRED)
-find_package(LibtorrentRasterbar REQUIRED)
+
+if(APPLE)
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(LIBTORRENT_RASTERBAR REQUIRED IMPORTED_TARGET libtorrent-rasterbar)
+    add_library(LibtorrentRasterbar::torrent-rasterbar ALIAS PkgConfig::LIBTORRENT_RASTERBAR)
+else()
+    find_package(LibtorrentRasterbar REQUIRED)
+endif()
 
 # =============================================================================
 # PROJECT SOURCES
@@ -138,8 +145,13 @@ target_link_libraries(
     OpenSSL::SSL
     OpenSSL::Crypto
     LibtorrentRasterbar::torrent-rasterbar
-    "${THIRDPARTY_DIR}/mpv/libmpv.dll.a"
 )
+if(APPLE)
+    find_library(MPV_LIBRARY NAMES mpv REQUIRED)
+    target_link_libraries(${PROJECT_NAME} PRIVATE ${MPV_LIBRARY})
+else()
+    target_link_libraries(${PROJECT_NAME} PRIVATE "${THIRDPARTY_DIR}/mpv/libmpv.dll.a")
+endif()
 
 # =============================================================================
 # INSTALL
