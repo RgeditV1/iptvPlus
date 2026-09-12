@@ -6,6 +6,7 @@
 #include <QPixmap>
 #include <QStandardPaths>
 #include <QNetworkRequest>
+#include <QScrollArea>
 
 #include <algorithm>
 
@@ -57,7 +58,18 @@ MovieDetailWidget::~MovieDetailWidget()
 
 void MovieDetailWidget::setupUi()
 {
-    QVBoxLayout* mainLayout = new QVBoxLayout(this);
+    // Layout principal del widget
+    QVBoxLayout* rootLayout = new QVBoxLayout(this);
+    rootLayout->setContentsMargins(0, 0, 0, 0);
+
+    // Crear un QScrollArea para permitir desplazarse si la ventana es muy pequeña
+    QScrollArea* scrollArea = new QScrollArea(this);
+    scrollArea->setWidgetResizable(true);
+    scrollArea->setFrameShape(QFrame::NoFrame);
+    scrollArea->setStyleSheet("QScrollArea { background-color: transparent; }");
+
+    QWidget* container = new QWidget(scrollArea);
+    QVBoxLayout* mainLayout = new QVBoxLayout(container);
     mainLayout->setContentsMargins(15, 15, 15, 15);
     mainLayout->setSpacing(15);
 
@@ -66,7 +78,7 @@ void MovieDetailWidget::setupUi()
     // ------------------------------------------------
     QHBoxLayout* topBarLayout = new QHBoxLayout();
 
-    m_backButton = new QPushButton("< Volver", this);
+    m_backButton = new QPushButton("< Volver", container);
     m_backButton->setCursor(Qt::PointingHandCursor);
     m_backButton->setStyleSheet(
         "QPushButton {"
@@ -103,8 +115,8 @@ void MovieDetailWidget::setupUi()
     QHBoxLayout* infoLayout = new QHBoxLayout();
     infoLayout->setSpacing(20);
 
-    m_posterLabel = new QLabel(this);
-    m_posterLabel->setFixedSize(180, 270);
+    m_posterLabel = new QLabel(container);
+    m_posterLabel->setFixedSize(140, 210); // Reducimos ligeramente el póster para dar espacio vertical
     m_posterLabel->setStyleSheet("background-color: #11111b; border-radius: 8px;");
     m_posterLabel->setScaledContents(true);
     m_posterLabel->setAlignment(Qt::AlignCenter);
@@ -112,20 +124,20 @@ void MovieDetailWidget::setupUi()
     infoLayout->addWidget(m_posterLabel);
 
     QVBoxLayout* metaLayout = new QVBoxLayout();
-    metaLayout->setSpacing(10);
+    metaLayout->setSpacing(8);
 
-    m_titleLabel = new QLabel(this);
-    m_titleLabel->setStyleSheet("color: #ffffff; font-size: 24px; font-weight: bold;");
+    m_titleLabel = new QLabel(container);
+    m_titleLabel->setStyleSheet("color: #ffffff; font-size: 20px; font-weight: bold;");
     m_titleLabel->setWordWrap(true);
 
-    m_metaLabel = new QLabel(this);
-    m_metaLabel->setStyleSheet("color: #89b4fa; font-size: 14px; font-weight: bold;");
+    m_metaLabel = new QLabel(container);
+    m_metaLabel->setStyleSheet("color: #89b4fa; font-size: 13px; font-weight: bold;");
 
-    m_descriptionLabel = new QLabel(this);
-    m_descriptionLabel->setStyleSheet("color: #a6adc8; font-size: 13px;");
+    m_descriptionLabel = new QLabel(container);
+    m_descriptionLabel->setStyleSheet("color: #a6adc8; font-size: 12px;");
     m_descriptionLabel->setWordWrap(true);
 
-    m_torrentSelector = new QComboBox(this);
+    m_torrentSelector = new QComboBox(container);
     m_torrentSelector->setFixedWidth(320);
     m_torrentSelector->setStyleSheet(
         "QComboBox {"
@@ -146,7 +158,7 @@ void MovieDetailWidget::setupUi()
         "}"
     );
 
-    m_playButton = new QPushButton("Reproducción Torrent", this);
+    m_playButton = new QPushButton("Reproducción Torrent", container);
     m_playButton->setCursor(Qt::PointingHandCursor);
     m_playButton->setFixedWidth(260);
     m_playButton->setStyleSheet(
@@ -156,7 +168,7 @@ void MovieDetailWidget::setupUi()
         "  font-weight: bold;"
         "  font-size: 14px;"
         "  border: none;"
-        "  padding: 10px;"
+        "  padding: 8px;"
         "  border-radius: 6px;"
         "}"
         "QPushButton:hover {"
@@ -168,16 +180,13 @@ void MovieDetailWidget::setupUi()
         "}"
     );
 
-    // leer la opción elegida en el QComboBox
     connect(m_playButton, &QPushButton::clicked, this, [this]() {
         if (m_torrentSelector->count() == 0) {
             qWarning() << "[MovieDetailWidget] No hay torrents seleccionables.";
             return;
         }
 
-        // Obtener el magnet URL guardado en la propiedad de datos del combo
         const QString magnetUrl = m_torrentSelector->currentData().toString();
-
         if (magnetUrl.isEmpty()) {
             qWarning() << "[MovieDetailWidget] El Magnet seleccionado está vacío.";
             return;
@@ -205,14 +214,14 @@ void MovieDetailWidget::setupUi()
     metaLayout->addStretch();
 
     infoLayout->addLayout(metaLayout, 1);
-    mainLayout->addLayout(infoLayout);
+    mainLayout->addLayout(infoLayout, 0); // No expandir la sección superior verticalmente
 
-    // ------------------------------------------------
-    // Reproductor
-    // ------------------------------------------------
-    m_videoPlayer = new VideoPlayerWindow(this);
-    m_videoPlayer->setMinimumHeight(400);
-    m_videoPlayer->setMaximumHeight(600);
+    m_videoPlayer = new VideoPlayerWindow(container);
+    
+    // Establecemos una altura mínima pequeña y permitimos que la política de tamaño expanda dinámicamente.
+    m_videoPlayer->setMinimumSize(320, 200);
+    m_videoPlayer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    
     m_videoPlayer->setStyleSheet(
         "VideoPlayerWindow {"
         "  border: 2px solid #89b4fa;"
@@ -221,7 +230,11 @@ void MovieDetailWidget::setupUi()
         "}"
     );
 
-    mainLayout->addWidget(m_videoPlayer, 0, Qt::AlignCenter);
+    // Añadir el reproductor con un stretch factor de 1 para que tome todo el espacio disponible
+    mainLayout->addWidget(m_videoPlayer, 1);
+
+    scrollArea->setWidget(container);
+    rootLayout->addWidget(scrollArea);
 }
 
 void MovieDetailWidget::setMovie(const MovieItem& movie)

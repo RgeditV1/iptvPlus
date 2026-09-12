@@ -267,16 +267,13 @@ set(CPACK_GENERATOR "NSIS;ZIP")
 
 set(CPACK_NSIS_CREATE_ICONS_EXTRA
     "
-    CreateShortCut
-        '$SMPROGRAMS\\$STARTMENU_FOLDER\\iptvPlus.lnk'
-        '$INSTDIR\\iptvPlus.exe'
+    CreateShortCut \\\"\$SMPROGRAMS\\\\\$STARTMENU_FOLDER\\\\iptvPlus.lnk\\\" \\\"\$INSTDIR\\\\iptvPlus.exe\\\"
     "
 )
 
 set(CPACK_NSIS_DELETE_ICONS_EXTRA
     "
-    Delete
-        '$SMPROGRAMS\\$START_MENU\\iptvPlus.lnk'
+    Delete \\\"\$SMPROGRAMS\\\\\$START_MENU\\\\iptvPlus.lnk\\\"
     "
 )
 
@@ -289,9 +286,9 @@ set(CPACK_NSIS_MUI_FINISHPAGE_RUN "iptvPlus.exe")
 
 set(CPACK_NSIS_EXTRA_INSTALL_COMMANDS
     "
-    ExecWait '\"\$INSTDIR\\_redist\\vcredist_v14.x64.exe\" /S'
-    ExecWait '\"\$INSTDIR\\_redist\\vcredist_v14.x86.exe\" /S'
-    ExecWait '\"\$INSTDIR\\_redist\\VulkanRT-Installer.exe\" /S'
+    ExecWait '\\\"\$INSTDIR\\\\_redist\\\\vcredist_v14.x64.exe\\\" /S'
+    ExecWait '\\\"\$INSTDIR\\\\_redist\\\\vcredist_v14.x86.exe\\\" /S'
+    ExecWait '\\\"\$INSTDIR\\\\_redist\\\\VulkanRT-Installer.exe\\\" /S'
     "
 )
 
