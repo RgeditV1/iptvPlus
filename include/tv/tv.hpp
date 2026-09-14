@@ -19,7 +19,7 @@ public:
     explicit TvWidget(QWidget* parent = nullptr);
     ~TvWidget() override;
 
-    VideoPlayerWindow* player() const { return m_player; }
+    //VideoPlayerWindow* player() const { return m_player; }
     VideoPlayerWindow* videoPlayerWindow() const { return m_player; }
 
 protected:
@@ -30,6 +30,7 @@ private:
     void setupUi();
     void setupRightSidebar();
     void toggleRightSidebar(bool show);
+    void restoreLayerOrder();
 
 private slots:
     void onChannelClicked(const QModelIndex& index);

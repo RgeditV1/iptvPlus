@@ -7,6 +7,7 @@
 #include <QStandardPaths>
 #include <QNetworkRequest>
 #include <QScrollArea>
+#include <QOverload>
 
 #include <algorithm>
 
@@ -180,29 +181,11 @@ void MovieDetailWidget::setupUi()
         "}"
     );
 
-    connect(m_playButton, &QPushButton::clicked, this, [this]() {
-        if (m_torrentSelector->count() == 0) {
-            qWarning() << "[MovieDetailWidget] No hay torrents seleccionables.";
-            return;
-        }
+    connect(m_playButton, &QPushButton::clicked, this, &MovieDetailWidget::startSelectedTorrent);
 
-        const QString magnetUrl = m_torrentSelector->currentData().toString();
-        if (magnetUrl.isEmpty()) {
-            qWarning() << "[MovieDetailWidget] El Magnet seleccionado está vacío.";
-            return;
-        }
-
-        const QString tempPath = QStandardPaths::writableLocation(QStandardPaths::TempLocation);
-        const QString savePath = QDir(tempPath).filePath("iptv_torrents");
-
-        qDebug() << "[MovieDetailWidget] Iniciando torrent seleccionado:" << m_torrentSelector->currentText();
-
-        m_playButton->setEnabled(false);
-        m_playButton->setText("Buscando peers...");
-
-        if (!m_torrentEngine->startMagnet(magnetUrl, savePath)) {
-            m_playButton->setEnabled(true);
-            m_playButton->setText("Play");
+    connect(m_torrentSelector, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int index) {
+        if (index >= 0) {
+            startSelectedTorrent();
         }
     });
 
@@ -267,6 +250,7 @@ void MovieDetailWidget::setMovie(const MovieItem& movie)
         m_posterLabel->setText("Sin Póster");
     }
 
+    m_torrentSelector->blockSignals(true); // prevent auto start
     m_torrentSelector->clear();
 
     int torrentCount = 0;
@@ -283,6 +267,8 @@ void MovieDetailWidget::setMovie(const MovieItem& movie)
             m_torrentSelector->addItem(label, stream.url);
         }
     }
+    
+    m_torrentSelector->blockSignals(false);
 
     if (torrentCount == 0) {
         m_torrentSelector->setVisible(false);
@@ -290,6 +276,44 @@ void MovieDetailWidget::setMovie(const MovieItem& movie)
         m_playButton->setText("Sin Torrents");
     } else {
         m_torrentSelector->setVisible(true);
+        m_playButton->setEnabled(true);
+        m_playButton->setText("Play");
+    }
+}
+
+void MovieDetailWidget::startSelectedTorrent()
+{
+    if (m_torrentSelector->count() == 0) {
+        qWarning() << "[MovieDetailWidget] No hay torrents seleccionables.";
+        return;
+    }
+
+    const QString magnetUrl = m_torrentSelector->currentData().toString();
+    if (magnetUrl.isEmpty()) {
+        qWarning() << "[MovieDetailWidget] El Magnet seleccionado está vacío.";
+        return;
+    }
+
+    // Detener reproducción y torrent actual si existían
+    if (m_torrentEngine) {
+        m_torrentEngine->stop();
+    }
+    if (m_videoPlayer) {
+        m_videoPlayer->stop();
+    }
+
+    // Definir ruta temporal de guardado
+    const QString tempPath = QStandardPaths::writableLocation(QStandardPaths::TempLocation);
+    const QString savePath = QDir(tempPath).filePath("iptv_torrents");
+
+    qDebug() << "[MovieDetailWidget] Cambiando a torrent:" << m_torrentSelector->currentText();
+
+    // Actualizar la interfaz
+    m_playButton->setEnabled(false);
+    m_playButton->setText("Buscando peers...");
+
+    // Iniciar la nueva descarga/stream
+    if (!m_torrentEngine->startMagnet(magnetUrl, savePath)) {
         m_playButton->setEnabled(true);
         m_playButton->setText("Play");
     }

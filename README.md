@@ -1,12 +1,12 @@
 [![Build Windows 🪟](https://github.com/RgeditV1/iptvPlus/actions/workflows/build.yml/badge.svg)](https://github.com/RgeditV1/iptvPlus/actions/workflows/build.yml)
 
-Video Player for ```.m3u``` Files and Movies, Series is Coming Soon
+Video Player to Watch Live TV and Movies. (Series is Coming Soon)
 
 ![screenshoot](/screenshoot.png "IPTV ++ Screenshoot") ![screenshoot](/screenshoot2.png "IPTV ++ Screenshoot")
 
 ### Build
 
-Before run compilation command, you need ``libmpv-2.dll``, that is include in ``3rdparty/mpv`` in 4 compressed files.
+Before run compilation command, you need `libmpv-2.dll`, that is include in `3rdparty/mpv` in 4 compressed files.
 
 ```sh
 cmake -S . -B build `
@@ -26,10 +26,10 @@ cpack --config build/CPackConfig.cmake -C Release
 
 ### 3rdpartys
 
-All deps using vcpkg must be installed using ``x64-windows-static-md triplet``
+All deps using vcpkg must be installed using `x64-windows-static-md`
 
-- ``mpv`` (videoplayer)
-- ``libtorrent`` (should use vcpkg)
-- ``vcpkg`` for lib magnaments (optional but recomended)
-- ``OpenSSL`` (should use vcpkg)
-- ``Boost`` (should use vcpkg)
+- `mpv` (videoplayer)
+- `libtorrent` (should use vcpkg)
+- `vcpkg` for lib magnaments (optional but recomended)
+- `OpenSSL` (should use vcpkg)
+- `Boost` (should use vcpkg)

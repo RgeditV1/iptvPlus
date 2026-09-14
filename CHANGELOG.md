@@ -1,5 +1,14 @@
 # Lo Nuevo!
 
+## [0.2.1] -> HOTFIX
+
+### Correcciones de Errores (Fixes)
+
+- **CPack / Instalador:** Se corrigió la inclusión de `scrap.exe` en el instalador NSIS usando la directiva `install(PROGRAMS ...)` opcional y se configuró la generación automática del acceso directo en el escritorio.
+- **Interfaz (Z-Index / Renderizado):** Se solucionó el problema por el cual la barra lateral de canales quedaba superpuesta por debajo de los controles del reproductor al salir del modo pantalla completa.
+- **Reproductor:** Se añadió la limpieza automática de las opciones de los menús de audio y subtítulos al detener la reproducción (`stop()`) o al presentarse un error de red.
+- **Reproductor:** Se implementaron grupos de acciones exclusivas (`QActionGroup`) en las pistas de audio y subtítulos para evitar la selección múltiple simultánea de opciones.
+
 ## [0.2]
 
 ### Cambio

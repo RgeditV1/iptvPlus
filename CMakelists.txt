@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 4.0)
-project(iptvPlus VERSION 0.2 LANGUAGES CXX)
+project(iptvPlus VERSION 0.2.1 LANGUAGES CXX)
 
 # =============================================================================
 # C++ CONFIGURATION
@@ -23,7 +23,7 @@ set(CMAKE_AUTORCC ON)
 
 set(THIRDPARTY_DIR "${CMAKE_CURRENT_SOURCE_DIR}/3rdparty")
 
-# Forzar el uso de librerías estáticas para OpenSSL
+# Forzar búsqueda de librerías estáticas para OpenSSL
 set(OPENSSL_USE_STATIC_LIBS ON CACHE BOOL "" FORCE)
 
 find_package(Qt6 REQUIRED COMPONENTS
@@ -146,6 +146,7 @@ target_link_libraries(
     OpenSSL::Crypto
     LibtorrentRasterbar::torrent-rasterbar
 )
+
 if(APPLE)
     find_library(MPV_LIBRARY NAMES mpv REQUIRED)
     target_link_libraries(${PROJECT_NAME} PRIVATE ${MPV_LIBRARY})
@@ -181,10 +182,17 @@ if(PYINSTALLER_EXECUTABLE)
     set(PYTHON_SCRIPT "${CMAKE_CURRENT_SOURCE_DIR}/src/iptvplus/main.py")
     set(PY_OUTPUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/py_build")
     set(PY_EXE_NAME scrap)
-    set(PY_TARGET_EXE "${PY_OUTPUT_DIR}/dist/${PY_EXE_NAME}.exe")
+    
+    if(WIN32)
+        set(PY_TARGET_EXE "${PY_OUTPUT_DIR}/dist/${PY_EXE_NAME}.exe")
+    else()
+        set(PY_TARGET_EXE "${PY_OUTPUT_DIR}/dist/${PY_EXE_NAME}")
+    endif()
 
-    add_custom_command(
-        OUTPUT "${PY_TARGET_EXE}"
+    file(GLOB_RECURSE ALL_PYTHON_SCRIPTS "${CMAKE_CURRENT_SOURCE_DIR}/src/iptvplus/*.py")
+
+    add_custom_target(
+        build_python_helper ALL
         COMMAND "${PYINSTALLER_EXECUTABLE}"
             --noconfirm
             --onefile
@@ -195,20 +203,18 @@ if(PYINSTALLER_EXECUTABLE)
             --workpath "${PY_OUTPUT_DIR}/build"
             --specpath "${PY_OUTPUT_DIR}"
             "${PYTHON_SCRIPT}"
-        DEPENDS "${PYTHON_SCRIPT}"
+        BYPRODUCTS "${PY_TARGET_EXE}"
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
         COMMENT "Compilando scraper Python con PyInstaller..."
         VERBATIM
     )
 
-    add_custom_target(
-        build_python_helper
-        ALL
-        DEPENDS "${PY_TARGET_EXE}"
-    )
-
     add_dependencies(${PROJECT_NAME} build_python_helper)
 
-    install(FILES "${PY_TARGET_EXE}" DESTINATION .)
+    install(
+        FILES "${PY_TARGET_EXE}"
+        DESTINATION .
+    )
 endif()
 
 # =============================================================================
@@ -250,33 +256,21 @@ install(
 # CPACK
 # =============================================================================
 
-set(CPACK_NSIS_MUI_ICON "${CMAKE_CURRENT_SOURCE_DIR}/iptv-icon.ico")
-set(CPACK_NSIS_MUI_UNIICON "${CMAKE_CURRENT_SOURCE_DIR}/iptv-icon.ico")
-set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE")
 set(CPACK_PACKAGE_NAME "iptvPlus")
 set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")
 set(CPACK_PACKAGE_VENDOR "@RgeditV1")
+set(CPACK_PACKAGE_INSTALL_DIRECTORY "iptvPlus")
+set(CPACK_NSIS_MUI_ICON "${CMAKE_CURRENT_SOURCE_DIR}/iptv-icon.ico")
+set(CPACK_NSIS_MUI_UNIICON "${CMAKE_CURRENT_SOURCE_DIR}/iptv-icon.ico")
+set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE")
 set(CPACK_NSIS_DISPLAY_NAME "iptvPlus")
 set(CPACK_NSIS_HELP_LINK "rgeditv1@protonmail.com")
 set(CPACK_NSIS_URL_INFO_ABOUT "https://github.com/RgeditV1/iptvPlus")
+set(CPACK_PACKAGE_EXECUTABLES "iptvPlus" "iptvPlus")
+set(CPACK_EXECUTABLE_FORMAT "iptvPlus.exe")
+set(CPACK_CREATE_DESKTOP_LINKS "iptvPlus")
+set(CPACK_NSIS_EXECUTABLES_DIRECTORY ".")
 set(CPACK_GENERATOR "NSIS;ZIP")
-
-# =============================================================================
-# START MENU
-# =============================================================================
-
-set(CPACK_NSIS_CREATE_ICONS_EXTRA
-    "
-    CreateShortCut \\\"\$SMPROGRAMS\\\\\$STARTMENU_FOLDER\\\\iptvPlus.lnk\\\" \\\"\$INSTDIR\\\\iptvPlus.exe\\\"
-    "
-)
-
-set(CPACK_NSIS_DELETE_ICONS_EXTRA
-    "
-    Delete \\\"\$SMPROGRAMS\\\\\$START_MENU\\\\iptvPlus.lnk\\\"
-    "
-)
-
 set(CPACK_NSIS_MODIFY_PATH ON)
 set(CPACK_NSIS_MUI_FINISHPAGE_RUN "iptvPlus.exe")
 

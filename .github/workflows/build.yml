@@ -35,7 +35,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v6
         with:
-          python-version: '3.12'
+          python-version: '3.14'
 
 
       # ============================================================
@@ -296,6 +296,33 @@ jobs:
               exit 1
           }
 
+
+
+      # ============================================================
+      # Setup uv & Install Dependencies
+      # ============================================================
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install Python Project Dependencies
+        shell: powershell
+        run: |
+          Write-Host "========================================"
+          Write-Host "Instalando dependencias desde pyproject.toml"
+          Write-Host "========================================"
+
+          uv sync
+
+          # Instalar en el entorno del sistema para que CMake encuentre pyinstaller globalmente
+          uv pip install --system .
+
+          if ($LASTEXITCODE -ne 0) {
+              Write-Error "Falló la instalación de dependencias con uv."
+              exit $LASTEXITCODE
+          }
 
       # ============================================================
       # Configure CMake

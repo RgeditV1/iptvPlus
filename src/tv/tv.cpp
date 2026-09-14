@@ -39,6 +39,15 @@ TvWidget::TvWidget(QWidget* parent)
 
 TvWidget::~TvWidget() = default;
 
+void TvWidget::restoreLayerOrder()
+{
+    if (m_player)
+        m_player->raise();
+
+    if (m_rightSidebar)
+        m_rightSidebar->raise();
+}
+
 void TvWidget::setupUi()
 {
     QVBoxLayout* layout = new QVBoxLayout(this);
@@ -47,6 +56,15 @@ void TvWidget::setupUi()
 
     m_player = new VideoPlayerWindow(this);
     layout->addWidget(m_player);
+
+    connect(m_player, &VideoPlayerWindow::fullscreenToggled,
+            this, [this](bool fullscreen) {
+        if (fullscreen) {
+            return;
+        }
+
+        QTimer::singleShot(0, this, &TvWidget::restoreLayerOrder);
+    });
 }
 
 void TvWidget::setupRightSidebar()
@@ -117,15 +135,22 @@ void TvWidget::onChannelClicked(const QModelIndex& index)
 
 void TvWidget::toggleRightSidebar(bool show)
 {
-    if (m_sidebarVisible == show)
+    if (m_sidebarVisible == show) {
         return;
+    }
 
     m_sidebarVisible = show;
     m_sidebarAnimation->stop();
+
+    if (show) {
+        m_rightSidebar->raise();
+    }
+
     m_sidebarAnimation->setStartValue(m_rightSidebar->geometry());
 
     int targetX = show ? (width() - m_sidebarWidth) : width();
     m_sidebarAnimation->setEndValue(QRect(targetX, 0, m_sidebarWidth, height()));
+
     m_sidebarAnimation->start();
 }
 
@@ -152,6 +177,9 @@ bool TvWidget::eventFilter(QObject* watched, QEvent* event)
 void TvWidget::resizeEvent(QResizeEvent* event)
 {
     QWidget::resizeEvent(event);
+
     int currentX = m_sidebarVisible ? (width() - m_sidebarWidth) : width();
+
     m_rightSidebar->setGeometry(currentX, 0, m_sidebarWidth, height());
+    m_rightSidebar->raise();
 }

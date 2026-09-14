@@ -28,6 +28,7 @@ public:
     void play(const QString& url);
     void pause();
     void stop();
+    void resume();
 
     void setTrackControlsVisible(bool visible);
 
@@ -40,6 +41,9 @@ protected:
 private slots:
     void onBufferingChanged(bool buffering);
     void handlePlaybackError(const QString& error);
+
+signals:
+    void fullscreenToggled(bool isFullscreen);
 
 private:
     void setupUi();

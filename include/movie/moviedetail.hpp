@@ -22,6 +22,7 @@ public:
     ~MovieDetailWidget() override;
 
     void setMovie(const MovieItem& movie);
+    VideoPlayerWindow* player() const { return m_videoPlayer; }
 
 signals:
     void backRequested();
@@ -30,6 +31,9 @@ private slots:
     void onTorrentReadyToPlay();
     void onTorrentError(const QString& message);
     void downloadPoster(const QString& url);
+
+private:
+    void startSelectedTorrent(); // change magnet url
 
 private:
     void setupUi();

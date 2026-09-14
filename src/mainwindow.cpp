@@ -9,6 +9,7 @@
 #include <QIcon>
 #include <QHeaderView>
 #include <QMouseEvent>
+#include <QTimer>
 
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent)
@@ -77,7 +78,6 @@ void MainWindow::setupUi()
     m_stackedWidget->addWidget(m_moviesView);
     m_stackedWidget->addWidget(m_movieDetailView);
 
-
     connect(m_moviesView, &MoviesWidget::movieSelected, this, [this](const MovieItem& movie) {
         m_movieDetailView->setMovie(movie);
         m_stackedWidget->setCurrentWidget(m_movieDetailView);
@@ -88,12 +88,25 @@ void MainWindow::setupUi()
     });
 
     connect(m_stackedWidget, &QStackedWidget::currentChanged, this, [this](int newIndex) {
-        if (newIndex != 0 && m_tvView && m_tvView->player()) {
-            m_tvView->player()->pause();
+        if (newIndex != 0 && m_tvView && m_tvView->videoPlayerWindow()) {
+            m_tvView->videoPlayerWindow()->pause();
         }
         
         if (m_tvView && m_tvView->videoPlayerWindow()) {
-            m_tvView->videoPlayerWindow()->setTrackControlsVisible(true);
+            m_tvView->videoPlayerWindow()->setTrackControlsVisible(true); // unnecesary but i dont want to change it, rework it if u want
+        }
+    });
+
+    connect(m_stackedWidget, &QStackedWidget::currentChanged, this, [this](int newIndex) {
+        if (newIndex == 0 && m_tvView && m_tvView->videoPlayerWindow()) {
+            VideoPlayerWindow* playerWin = m_tvView->videoPlayerWindow();
+            
+            // Detener reproductor de películas si estaba activo
+            if (m_movieDetailView && m_movieDetailView->player()) {
+                m_movieDetailView->player()->pause();
+            }
+
+            playerWin->resume();
         }
     });
 
@@ -126,12 +139,12 @@ void MainWindow::setupSidebar()
     QTreeWidgetItem* tvItem = new QTreeWidgetItem(m_navTree);
     tvItem->setIcon(0, QIcon(":/resources/icons/tv.svg"));
     tvItem->setText(0, "TV");
-    tvItem->setData(0, Qt::UserRole, 0); // Índice para el QStackedWidget
+    tvItem->setData(0, Qt::UserRole, 0);
 
     QTreeWidgetItem* moviesItem = new QTreeWidgetItem(m_navTree);
     moviesItem->setIcon(0, QIcon(":/resources/icons/film.svg"));
     moviesItem->setText(0, "Películas");
-    moviesItem->setData(0, Qt::UserRole, 1); // Índice para el QStackedWidget
+    moviesItem->setData(0, Qt::UserRole, 1);
 
     m_navTree->setCurrentItem(tvItem);
 
@@ -173,17 +186,15 @@ void MainWindow::toggleSidebar(bool show)
 
     if (show) {
         m_sidebar->raise();
-        m_menuButton->raise(); // Elevar el botón para que quede sobre el sidebar si se superponen
+        m_menuButton->raise();
     }
 
     int targetSidebarX = show ? 0 : -m_sidebarWidth;
-    int targetButtonX = show ? m_sidebarWidth + 10 : 10; // Posición original + margen
+    int targetButtonX = show ? m_sidebarWidth + 10 : 10;
 
-    // Animar la barra lateral
     m_sidebarAnimation->setStartValue(m_sidebar->geometry());
     m_sidebarAnimation->setEndValue(QRect(targetSidebarX, 0, m_sidebarWidth, height()));
 
-    // Animar la posición del botón de menú en paralelo
     QPropertyAnimation* buttonAnim = new QPropertyAnimation(m_menuButton, "pos", this);
     buttonAnim->setDuration(200);
     buttonAnim->setStartValue(m_menuButton->pos());
@@ -205,6 +216,11 @@ bool MainWindow::eventFilter(QObject* watched, QEvent* event)
             } else if (m_sidebarVisible && mouseX > m_sidebarWidth) {
                 toggleSidebar(false);
             }
+        } else if (event->type() == QEvent::LayoutRequest || event->type() == QEvent::Resize) {
+            if (m_sidebar) {
+                m_sidebar->raise();
+                if (m_menuButton) m_menuButton->raise();
+            }
         }
     }
     return QMainWindow::eventFilter(watched, event);
@@ -215,5 +231,5 @@ void MainWindow::resizeEvent(QResizeEvent* event)
     QMainWindow::resizeEvent(event);
     int currentX = m_sidebarVisible ? 0 : -m_sidebarWidth;
     m_sidebar->setGeometry(currentX, 0, m_sidebarWidth, height());
-    m_sidebar->raise(); // Mantener arriba durante redimensionados
+    m_sidebar->raise();
 }
