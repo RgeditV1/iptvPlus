@@ -45,6 +45,7 @@ private:
     QLabel* m_posterLabel{nullptr};
     QLabel* m_titleLabel{nullptr};
     QLabel* m_metaLabel{nullptr};
+    QHBoxLayout* m_genresLayout = nullptr;
     QLabel* m_descriptionLabel{nullptr};
     QPushButton* m_playButton{nullptr};
     QComboBox* m_torrentSelector = nullptr;

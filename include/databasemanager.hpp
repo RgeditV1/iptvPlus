@@ -5,25 +5,25 @@
 #include <QSqlDatabase>
 
 struct StreamInfo {
-    int id{0};
-    int mediaId{0};
+    int id = -1;
+    int mediaId = -1;
     QString server;
-    QString url; // Magnet URL o stream
+    QString url;
     QString language;
     QString quality;
 };
 
 struct MovieItem {
-    int id{0};
+    int id = -1;
     QString title;
     QString type;
     QString url;
     QString poster;
     QString description;
-    int releaseYear{0};
-    double rating{0.0};
-    QString trailer;
-    QStringList genres;
+    int releaseYear = 0;
+    double rating = 0.0;
+    QString trailer;            // Future Purpose
+    QList<QString> genres;
     QList<StreamInfo> streams;
 };
 
@@ -33,21 +33,17 @@ public:
 
     bool initDatabase();
     bool isConnected() const;
-
     
-    QList<MovieItem> getSavedMovies(int limit = 50, int offset = 0, const QString& searchTerm = QString());
+    QList<MovieItem> getSavedMovies(int limit = 50, int offset = 0, const QString& searchTerm = "");
     MovieItem getMovieById(int movieId);
-    QList<StreamInfo> getStreamsForMedia(int mediaId, const QString& targetLang = QString());
+    QList<StreamInfo> getStreamsForMedia(int mediaId, const QString& targetLang = "");
 
 private:
     DatabaseManager();
     ~DatabaseManager();
 
-    DatabaseManager(const DatabaseManager&) = delete;
-    DatabaseManager& operator=(const DatabaseManager&) = delete;
-
     QString getDatabasePath() const;
 
     QSqlDatabase m_db;
-    bool m_connected{false};
+    bool m_connected = false;
 };

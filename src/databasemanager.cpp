@@ -165,6 +165,20 @@ MovieItem DatabaseManager::getMovieById(int movieId)
         item.rating = query.value("rating").toDouble();
         item.trailer = query.value("trailer").toString();
 
+        QSqlQuery genreQuery(m_db);
+        genreQuery.prepare(R"(
+            SELECT g.name
+            FROM genres g
+            INNER JOIN media_genres mg ON g.id = mg.genre_id
+            WHERE mg.media_id = :media_id
+        )");
+        genreQuery.bindValue(":media_id", item.id);
+        if (genreQuery.exec()) {
+            while (genreQuery.next()) {
+                item.genres.append(genreQuery.value("name").toString());
+            }
+        }
+
         item.streams = getStreamsForMedia(item.id);
     }
 
