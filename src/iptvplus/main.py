@@ -133,10 +133,10 @@ def main():
     # Opción: Búsqueda o filtrado por género desde Scraper
     movies = []
     if args.search:
-        print(f"\nBuscando '{args.search}'...")
+        print("\nBuscando...")
         movies = search_movies(args.search, limit=args.limit)
     elif args.genre:
-        print(f"\nObteniendo películas del género '{args.genre}'...")
+        print("\nObteniendo películas por género...")
         movies = get_by_genre(args.genre, limit=args.limit)
     else:
         parser.print_help()
@@ -149,24 +149,23 @@ def main():
     print(f"\nSe encontraron {len(movies)} resultados:\n")
 
     for idx, movie in enumerate(movies, 1):
-        print(f"{idx}. {movie['title']} ({movie.get('year', 'N/A')})")
-        print(f"   TMDB ID: {movie.get('id')}")
-        print(f"   Rating: {movie.get('rating', 'N/A')}")
-        print(f"   Poster: {movie.get('poster', 'N/A')}")
-        
-        details = get_movie_details(
-            title=movie["title"],
-            tmdb_id=movie.get("id"),
-            year=movie.get("year")
-        )
-        
-        movie["streams"] = details.get("streams", [])
+            print(f"{idx}. {movie['title']} ({movie.get('year', 'N/A')})")
+            print(f"   TMDB ID: {movie.get('id')}")
+            print(f"   Rating: {movie.get('rating', 'N/A')}")
+            print(f"   Poster: {movie.get('poster', 'N/A')}")
+            print(f"   Tráiler: {movie.get('trailer', 'N/A')}")
+            
+            streams = movie.get("streams", [])
+            if streams:
+                print(f"   Fuentes / Magnets ({len(streams)}):")
+            else:
+                print("   Fuentes / Magnets: No se encontraron torrents disponibles.")
 
-        if args.save:
-            save_movie(movie)
-            print("   -> Guardada en DB.")
+            if args.save:
+                save_movie(movie)
+                print("   -> Guardada en DB.")
 
-        print("-" * 50)
+            print("-" * 50)
 
 
 if __name__ == "__main__":
