@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 4.0)
-project(iptvPlus VERSION 0.2.1 LANGUAGES CXX)
+project(iptvPlus VERSION 0.2.2 LANGUAGES CXX)
 
 # =============================================================================
 # C++ CONFIGURATION
@@ -61,6 +61,8 @@ set(PROJECT_SOURCES
 
     # Torrent Engine
     src/torrentengine.cpp
+    src/httpstreamserver.cpp
+    include/httpstreamserver.hpp
     include/torrentengine.hpp
 
     # MPV

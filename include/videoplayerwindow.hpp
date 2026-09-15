@@ -14,6 +14,7 @@ class QHBoxLayout;
 class QMenu;
 
 class MpvPlayer;
+class TorrentEngine;
 
 class VideoPlayerWindow : public QWidget
 {
@@ -32,6 +33,10 @@ public:
 
     void setTrackControlsVisible(bool visible);
 
+    void setTorrentEngine(TorrentEngine* engine);
+
+    void setTvMode(bool isTv);
+
     MpvPlayer* player() const { return m_player; }
 
 protected:
@@ -44,6 +49,8 @@ private slots:
 
 signals:
     void fullscreenToggled(bool isFullscreen);
+    void previousChannelRequested();
+    void nextChannelRequested();
 
 private:
     void setupUi();
@@ -58,10 +65,12 @@ private:
     void updateVolumeIcon(double volume);
 
     void resetControlsHideTimer();
+    void resetTimeline();
     void updateTrackMenus();
 
 private:
     MpvPlayer* m_player = nullptr;
+    TorrentEngine* m_torrentEngine{nullptr};
 
     QWidget* m_videoWidget = nullptr;
     QWidget* m_controlsWidget = nullptr;
@@ -71,6 +80,8 @@ private:
     QPushButton* m_stopButton = nullptr;
     QPushButton* m_fullscreenButton = nullptr;
     QPushButton* m_volumeButton = nullptr;
+    QPushButton* m_skipBackButton{nullptr};
+    QPushButton* m_skipForwardButton{nullptr};
 
     QPushButton* m_audioButton = nullptr;
     QPushButton* m_subtitlesButton = nullptr;
@@ -85,12 +96,14 @@ private:
     QLabel* m_currentTimeLabel = nullptr;
     QLabel* m_durationLabel = nullptr;
     QLabel* m_errorLabel = nullptr;
+    QLabel* m_liveLabel{nullptr}; // LIVE
 
     QVBoxLayout* m_mainLayout = nullptr;
     QHBoxLayout* m_controlsLayout = nullptr;
 
     QProgressBar* m_loadingSpinner = nullptr;
 
+    bool m_isTvMode{false};
     bool m_isPlaying = false;
     bool m_isFullscreen = false;
 };

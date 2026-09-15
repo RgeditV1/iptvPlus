@@ -102,7 +102,7 @@ void MovieDetailWidget::setupUi()
     // Detalle Película
     // ------------------
     QHBoxLayout* infoLayout = new QHBoxLayout();
-    infoLayout->setSpacing(15); // Espaciado entre póster e info
+    infoLayout->setSpacing(15);
 
     // Póster con marco destacado
     m_posterLabel = new QLabel(container);
@@ -110,7 +110,7 @@ void MovieDetailWidget::setupUi()
     m_posterLabel->setStyleSheet(
         "QLabel {"
         "  background-color: #11111b;"
-        "  border: 2px solid #45475a;" // MARCO DEL PÓSTER
+        "  border: 2px solid #45475a;"
         "  border-radius: 8px;"
         "}"
     );
@@ -124,9 +124,11 @@ void MovieDetailWidget::setupUi()
     metaLayout->setSpacing(8);
     metaLayout->setAlignment(Qt::AlignLeft | Qt::AlignTop);
 
+    // TÍTULO: Ajuste de política de tamaño para expansión vertical
     m_titleLabel = new QLabel(container);
     m_titleLabel->setStyleSheet("color: #ffffff; font-size: 22px; font-weight: bold;");
     m_titleLabel->setWordWrap(true);
+    m_titleLabel->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Minimum);
 
     m_metaLabel = new QLabel(container);
     m_metaLabel->setStyleSheet("color: #89b4fa; font-size: 13px; font-weight: bold;");
@@ -137,9 +139,11 @@ void MovieDetailWidget::setupUi()
     m_genresLayout->setSpacing(6);
     m_genresLayout->setAlignment(Qt::AlignLeft);
 
+    // DESCRIPCIÓN: Ajuste de política de tamaño para expansión vertical
     m_descriptionLabel = new QLabel(container);
     m_descriptionLabel->setStyleSheet("color: #a6adc8; font-size: 13px; line-height: 1.4;");
     m_descriptionLabel->setWordWrap(true);
+    m_descriptionLabel->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Minimum);
 
     m_torrentSelector = new QComboBox(container);
     m_torrentSelector->setFixedWidth(320);
@@ -182,12 +186,12 @@ void MovieDetailWidget::setupUi()
         if (index >= 0) startSelectedTorrent();
     });
 
-    metaLayout->addWidget(m_titleLabel, 0, Qt::AlignLeft);
-    metaLayout->addWidget(m_metaLabel, 0, Qt::AlignLeft);
+    metaLayout->addWidget(m_titleLabel);
+    metaLayout->addWidget(m_metaLabel);
     metaLayout->addLayout(m_genresLayout);
-    metaLayout->addWidget(m_descriptionLabel, 0, Qt::AlignLeft);
-    metaLayout->addWidget(m_torrentSelector, 0, Qt::AlignLeft);
-    metaLayout->addWidget(m_playButton, 0, Qt::AlignLeft);
+    metaLayout->addWidget(m_descriptionLabel);
+    metaLayout->addWidget(m_torrentSelector);
+    metaLayout->addWidget(m_playButton);
 
     infoLayout->addLayout(metaLayout, 1);
     mainLayout->addLayout(infoLayout, 0);

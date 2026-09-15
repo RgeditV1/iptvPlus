@@ -57,93 +57,41 @@ void MpvPlayer::handleEvent(mpv_event* event)
 
     switch (event->event_id) {
 
-    case MPV_EVENT_PROPERTY_CHANGE:
-    {
-        auto* property =
-            static_cast<mpv_event_property*>(
-                event->data
-            );
-
-        if (!property)
-            break;
-
-        if (!property->name)
+    case MPV_EVENT_PROPERTY_CHANGE: {
+        auto* property = static_cast<mpv_event_property*>(event->data);
+        if (!property || !property->name)
             break;
 
         if (qstrcmp(property->name, "track-list") == 0) {
             emit tracksChanged();
         }
-
-        if (qstrcmp(property->name, "time-pos") == 0) {
-
-            if (property->format == MPV_FORMAT_DOUBLE &&
-                property->data) {
-
-                const double position =
-                    *static_cast<double*>(
-                        property->data
-                    );
-
+        else if (qstrcmp(property->name, "time-pos") == 0) {
+            if (property->format == MPV_FORMAT_DOUBLE && property->data) {
+                const double position = *static_cast<double*>(property->data);
                 emit positionChanged(position);
             }
-
-        } else if (
-            qstrcmp(property->name, "duration") == 0
-        ) {
-
-            if (property->format == MPV_FORMAT_DOUBLE &&
-                property->data) {
-
-                const double duration =
-                    *static_cast<double*>(
-                        property->data
-                    );
-
+        } 
+        else if (qstrcmp(property->name, "duration") == 0) {
+            if (property->format == MPV_FORMAT_DOUBLE && property->data) {
+                const double duration = *static_cast<double*>(property->data);
                 emit durationChanged(duration);
             }
-
-        } else if (
-            qstrcmp(property->name, "pause") == 0
-        ) {
-
-            if (property->format == MPV_FORMAT_FLAG &&
-                property->data) {
-
-                const bool paused =
-                    *static_cast<int*>(
-                        property->data
-                    ) != 0;
-
+        } 
+        else if (qstrcmp(property->name, "pause") == 0) {
+            if (property->format == MPV_FORMAT_FLAG && property->data) {
+                const bool paused = *static_cast<int*>(property->data) != 0;
                 emit pauseChanged(paused);
             }
-
-        } else if (
-            qstrcmp(property->name, "mute") == 0
-        ) {
-
-            if (property->format == MPV_FORMAT_FLAG &&
-                property->data) {
-
-                const bool muted =
-                    *static_cast<int*>(
-                        property->data
-                    ) != 0;
-
+        } 
+        else if (qstrcmp(property->name, "mute") == 0) {
+            if (property->format == MPV_FORMAT_FLAG && property->data) {
+                const bool muted = *static_cast<int*>(property->data) != 0;
                 emit muteChanged(muted);
             }
-
-        } else if (
-            qstrcmp(property->name, "paused-for-cache") == 0
-        ) {
-
-            if (property->format == MPV_FORMAT_FLAG &&
-                property->data) {
-
-                const bool buffering =
-                    *static_cast<int*>(
-                        property->data
-                    ) != 0;
-
+        } 
+        else if (qstrcmp(property->name, "paused-for-cache") == 0) {
+            if (property->format == MPV_FORMAT_FLAG && property->data) {
+                const bool buffering = *static_cast<int*>(property->data) != 0;
                 emit bufferingChanged(buffering);
             }
         }
@@ -155,38 +103,15 @@ void MpvPlayer::handleEvent(mpv_event* event)
         emit playbackStarted();
         break;
 
-    case MPV_EVENT_END_FILE:
-    {
-        auto* endFile =
-            static_cast<mpv_event_end_file*>(
-                event->data
-            );
-
-        if (endFile) {
-
-            if (endFile->reason == MPV_END_FILE_REASON_ERROR) {
-
-                const QString errorMsg =
-                    QString::fromUtf8(
-                        mpv_error_string(endFile->error)
-                    );
-
-                qWarning()
-                    << "[MpvPlayer] Error de reproducción:"
-                    << errorMsg;
-
-                emit playbackError(errorMsg);
-
-            } else {
-
-                emit playbackFinished();
-            }
-
+    case MPV_EVENT_END_FILE: {
+        auto* endFile = static_cast<mpv_event_end_file*>(event->data);
+        if (endFile && endFile->reason == MPV_END_FILE_REASON_ERROR) {
+            const QString errorMsg = QString::fromUtf8(mpv_error_string(endFile->error));
+            qWarning() << "[MpvPlayer] Error de reproducción:" << errorMsg;
+            emit playbackError(errorMsg);
         } else {
-
             emit playbackFinished();
         }
-
         break;
     }
 
@@ -195,11 +120,7 @@ void MpvPlayer::handleEvent(mpv_event* event)
         break;
 
     case MPV_EVENT_SHUTDOWN:
-        break;
-
     case MPV_EVENT_LOG_MESSAGE:
-        break;
-
     default:
         break;
     }
@@ -210,258 +131,90 @@ void MpvPlayer::observeProperties()
     if (!m_mpv)
         return;
 
-    const char* command[] = {
-        "observe_property",
-        "1",
-        "time-pos",
-        nullptr
-    };
-
-    mpv_command(
-        m_mpv,
-        command
-    );
-
-    const char* command2[] = {
-        "observe_property",
-        "2",
-        "duration",
-        nullptr
-    };
-
-    mpv_command(
-        m_mpv,
-        command2
-    );
-
-    const char* command3[] = {
-        "observe_property",
-        "3",
-        "pause",
-        nullptr
-    };
-
-    mpv_command(
-        m_mpv,
-        command3
-    );
-
-    const char* command4[] = {
-        "observe_property",
-        "4",
-        "demuxer-cache-state",
-        nullptr
-    };
-
-    mpv_command(
-        m_mpv,
-        command4
-    );
-
-    const char* command5[] = {
-        "observe_property",
-        "5",
-        "paused-for-cache",
-        nullptr
-    };
-
-    mpv_command(
-        m_mpv,
-        command5
-    );
-
-    const char* command6[] = {
-        "observe_property",
-        "6",
-        "mute",
-        nullptr
-    };
-
-    mpv_command(
-        m_mpv,
-        command6
-    );
-
-    const char* command7[] = {
-        "observe_property",
-        "7",
-        "track-list",
-        nullptr
-    };
-
-    mpv_command(
-        m_mpv,
-        command7
-    );
+    // Observar propiedades con sus tipos de datos específicos
+    mpv_observe_property(m_mpv, 1, "time-pos", MPV_FORMAT_DOUBLE);
+    mpv_observe_property(m_mpv, 2, "duration", MPV_FORMAT_DOUBLE);
+    mpv_observe_property(m_mpv, 3, "pause", MPV_FORMAT_FLAG);
+    mpv_observe_property(m_mpv, 4, "demuxer-cache-state", MPV_FORMAT_NODE);
+    mpv_observe_property(m_mpv, 5, "paused-for-cache", MPV_FORMAT_FLAG);
+    mpv_observe_property(m_mpv, 6, "mute", MPV_FORMAT_FLAG);
+    mpv_observe_property(m_mpv, 7, "track-list", MPV_FORMAT_NONE);
 }
 
 bool MpvPlayer::initialize(WId wid)
 {
     if (m_mpv) {
-        qWarning()
-            << "[MpvPlayer] mpv ya está inicializado.";
-
+        qWarning() << "[MpvPlayer] mpv ya está inicializado.";
         return true;
     }
 
     if (!wid) {
-        qWarning()
-            << "[MpvPlayer] WId inválido.";
-
+        qWarning() << "[MpvPlayer] WId inválido.";
         return false;
     }
 
     m_mpv = mpv_create();
-
     if (!m_mpv) {
-        qCritical()
-            << "[MpvPlayer] No se pudo crear la instancia de mpv.";
-
+        qCritical() << "[MpvPlayer] No se pudo crear la instancia de mpv.";
         return false;
     }
 
-    mpv_set_option_string(
-        m_mpv,
-        "terminal",
-        "no"
-    );
-
-    mpv_set_option_string(
-        m_mpv,
-        "msg-level",
-        "all=warn"
-    );
-
-    mpv_set_option_string(
-        m_mpv,
-        "vo",
-        "gpu"
-    );
-
-    mpv_set_option_string(
-        m_mpv,
-        "ytdl",
-        "no"
-    );
+    // Configuración general de opciones
+    mpv_set_option_string(m_mpv, "terminal", "no");
+    mpv_set_option_string(m_mpv, "msg-level", "all=warn");
+    mpv_set_option_string(m_mpv, "vo", "gpu");
+    mpv_set_option_string(m_mpv, "ytdl", "no");
 
 #ifdef Q_OS_WIN
-
-    mpv_set_option_string(
-        m_mpv,
-        "gpu-context",
-        "d3d11"
-    );
-
+    mpv_set_option_string(m_mpv, "gpu-context", "d3d11");
 #else
-
-    mpv_set_option_string(
-        m_mpv,
-        "gpu-context",
-        "auto"
-    );
-
+    mpv_set_option_string(m_mpv, "gpu-context", "auto");
 #endif
 
-    mpv_set_option_string(
-        m_mpv,
-        "network-timeout",
-        "60"
-    );
+    // Red y Búfer
+    mpv_set_option_string(m_mpv, "network-timeout", "60");
+    mpv_set_option_string(m_mpv, "stream-lavf-o", "reconnect_delay_max=5");
+    mpv_set_option_string(m_mpv, "reconnect", "yes");
+    mpv_set_option_string(m_mpv, "cache", "yes");
+    mpv_set_option_string(m_mpv, "demuxer-max-bytes", "150M");
+    mpv_set_option_string(m_mpv, "demuxer-max-back-bytes", "50M");
+    mpv_set_option_string(m_mpv, "demuxer-readahead-secs", "60");
+    mpv_set_option_string(m_mpv, "index", "no");
 
-    mpv_set_option_string(
-        m_mpv,
-        "stream-lavf-o",
-        "reconnect_delay_max=5");
+    // Opciones de Seek
+    mpv_set_option_string(m_mpv, "hr-seek", "default");
+    mpv_set_option_string(m_mpv, "hr-seek-framedrop", "yes");
 
-    mpv_set_option_string(
-        m_mpv,
-        "reconnect",
-        "yes"
-    );
+    // Observar propiedades básicas de reproducción
+    mpv_observe_property(m_mpv, 0, "time-pos", MPV_FORMAT_DOUBLE);
+    mpv_observe_property(m_mpv, 0, "duration", MPV_FORMAT_DOUBLE);
+    mpv_observe_property(m_mpv, 0, "paused-for-cache", MPV_FORMAT_FLAG);
 
-    mpv_set_option_string(
-        m_mpv,
-        "cache",
-        "yes"
-    );
-
-    mpv_set_option_string(
-        m_mpv,
-        "demuxer-max-bytes",
-        "150M"
-    );
-
-    mpv_set_option_string(
-        m_mpv,
-        "--demuxer-max-back-bytes",
-        "50M"
-    );
-
-    mpv_set_option_string(
-        m_mpv,
-        "index",
-        "no");
-
-    mpv_set_option_string(
-        m_mpv,
-        "demuxer-readahead-secs",
-        "60"
-    );
-
-    const QByteArray widString =
-        QByteArray::number(
-            static_cast<quintptr>(wid)
-        );
-
-    int result = mpv_set_option_string(
-        m_mpv,
-        "wid",
-        widString.constData()
-    );
+    // Integración de ventana nativa (WId)
+    const QByteArray widString = QByteArray::number(static_cast<quintptr>(wid));
+    int result = mpv_set_option_string(m_mpv, "wid", widString.constData());
 
     if (result < 0) {
-        qCritical()
-            << "[MpvPlayer] Error configurando WId:"
-            << mpv_error_string(result);
-
+        qCritical() << "[MpvPlayer] Error configurando WId:" << mpv_error_string(result);
         mpv_terminate_destroy(m_mpv);
         m_mpv = nullptr;
-
         return false;
     }
 
-    // ----------------------------------------
-    // Wakeup callback
-    // ----------------------------------------
-
-    mpv_set_wakeup_callback(
-        m_mpv,
-        &MpvPlayer::wakeupCallback,
-        this
-    );
-
-    // ----------------------------------------
-    // Inicializar
-    // ----------------------------------------
+    // Callbacks e inicialización final del contexto mpv
+    mpv_set_wakeup_callback(m_mpv, &MpvPlayer::wakeupCallback, this);
 
     result = mpv_initialize(m_mpv);
-
     if (result < 0) {
-        qCritical()
-            << "[MpvPlayer] Error inicializando mpv:"
-            << mpv_error_string(result);
-
+        qCritical() << "[MpvPlayer] Error inicializando mpv:" << mpv_error_string(result);
         mpv_terminate_destroy(m_mpv);
         m_mpv = nullptr;
-
         return false;
     }
 
     observeProperties();
 
-    qDebug()
-        << "[MpvPlayer] mpv inicializado correctamente.";
-
+    qDebug() << "[MpvPlayer] mpv inicializado correctamente.";
     return true;
 }
 
@@ -715,7 +468,7 @@ void MpvPlayer::seek(double seconds)
     const char* command[] = {
         "seek",
         value.constData(),
-        "absolute",
+        "absolute+keyframes",
         nullptr
     };
 

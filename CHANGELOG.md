@@ -1,5 +1,23 @@
 # Lo Nuevo!
 
+## [0.2.2]
+
+# Añadido
+
+- filtrado por paises
+- Texto Live en modo TV
+
+## Cambio
+
+- Rework Scrap.exe, ahora utiliza imdb, tmdb y torrentio para conseguir los detalles de las peliculas
+- Se le agrego un marco a los posters en `Movie Detail`
+- Se cambio el modo de descarga de torrents, ahora se monta un servidor http para las url de las peliculas
+
+## Corregido
+
+- Antes el `Movie Detail` estaba desorganizado, ahora estan alineados a la izquierda
+- Antes el Timeline no funcionaba, ahora el timeline y los labels de timepo funcionan correctamente
+
 ## [0.2.1] -> HOTFIX
 
 ### Correcciones de Errores (Fixes)

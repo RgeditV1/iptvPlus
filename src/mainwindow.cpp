@@ -78,22 +78,39 @@ void MainWindow::setupUi()
     m_stackedWidget->addWidget(m_moviesView);
     m_stackedWidget->addWidget(m_movieDetailView);
 
+    // Configuración inicial explícita del modo TV
+    if (m_tvView && m_tvView->videoPlayerWindow()) {
+        m_tvView->videoPlayerWindow()->setTvMode(true);
+        m_tvView->videoPlayerWindow()->setTrackControlsVisible(true);
+    }
+
     connect(m_moviesView, &MoviesWidget::movieSelected, this, [this](const MovieItem& movie) {
         m_movieDetailView->setMovie(movie);
         m_stackedWidget->setCurrentWidget(m_movieDetailView);
     });
 
     connect(m_movieDetailView, &MovieDetailWidget::backRequested, this, [this]() {
+        // Si la película tiene un reproductor activo, lo detenemos y limpiamos el timeline
+        if (m_movieDetailView && m_movieDetailView->player()) {
+            m_movieDetailView->player()->stop(); // Llama a stop() que resetea el reproductor y el timeline
+        }
+        
         m_stackedWidget->setCurrentWidget(m_moviesView);
     });
 
     connect(m_stackedWidget, &QStackedWidget::currentChanged, this, [this](int newIndex) {
+        // Si salimos de la vista de detalle de película (index 2)
+        if (newIndex != 2 && m_movieDetailView && m_movieDetailView->player()) {
+            m_movieDetailView->player()->stop();
+        }
+
         if (newIndex != 0 && m_tvView && m_tvView->videoPlayerWindow()) {
             m_tvView->videoPlayerWindow()->pause();
         }
         
         if (m_tvView && m_tvView->videoPlayerWindow()) {
-            m_tvView->videoPlayerWindow()->setTrackControlsVisible(true); // unnecesary but i dont want to change it, rework it if u want
+            m_tvView->videoPlayerWindow()->setTvMode(newIndex == 0);
+            m_tvView->videoPlayerWindow()->setTrackControlsVisible(true);
         }
     });
 

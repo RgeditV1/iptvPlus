@@ -4,20 +4,20 @@
 #include <QList>
 
 struct M3UItem {
-    QString tvgId;
     QString title;
     QString url;
+    QString tvgId;
+    QString country;
 };
 
 class M3UParser {
 public:
-
     M3UParser() = default;
 
     /**
-     * @brief Analiza el contenido de texto de una lista de reproducción M3U y extrae sus elementos.
-     * @param content Cadena de texto con la estructura de un archivo M3U/M3U8.
-     * @return Lista de estructuras M3UItem obtenidas del contenido.
+     * @brief Analiza el contenido de un archivo M3U/M3U8.
+     * @param content Cadena con el contenido M3U.
+     * @param defaultCountry País a utilizar si la etiqueta #EXTINF no especifica tvg-country ni group-title.
      */
-    QList<M3UItem> parseContent(const QString& content);
+    QList<M3UItem> parseContent(const QString& content, const QString& defaultCountry = "Sin categoría");
 };

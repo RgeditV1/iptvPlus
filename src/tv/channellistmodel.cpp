@@ -53,20 +53,49 @@ const M3UItem* ChannelListModel::channelAt(int row) const
 
 void ChannelListModel::filter(const QString& text)
 {
+    currentFilterText = text;
+    applyFilters();
+}
+
+void ChannelListModel::filterByCountry(const QString& country)
+{
+    currentCountryFilter = country;
+    applyFilters();
+}
+
+void ChannelListModel::applyFilters()
+{
     beginResetModel();
     filteredIndexes.clear();
-    
-    if (text.trimmed().isEmpty()) {
-        filteredIndexes.reserve(allChannels.size());
-        for (int i = 0; i < allChannels.size(); ++i) {
+
+    for (int i = 0; i < allChannels.size(); ++i) {
+        const M3UItem& item = allChannels.at(i);
+
+        bool matchesText = currentFilterText.isEmpty() || 
+                           item.title.contains(currentFilterText, Qt::CaseInsensitive);
+        
+        bool matchesCountry = currentCountryFilter.isEmpty() || 
+                              currentCountryFilter.compare("Todos", Qt::CaseInsensitive) == 0 ||
+                              item.country.trimmed().compare(currentCountryFilter.trimmed(), Qt::CaseInsensitive) == 0;
+
+        if (matchesText && matchesCountry) {
             filteredIndexes.append(i);
         }
-    } else {
-        for (int i = 0; i < allChannels.size(); ++i) {
-            if (allChannels.at(i).title.contains(text, Qt::CaseInsensitive)) {
-                filteredIndexes.append(i);
-            }
+    }
+
+    endResetModel();
+}
+
+QStringList ChannelListModel::getAvailableCountries() const
+{
+    QSet<QString> countries;
+    for (const auto& item : allChannels) {
+        if (!item.country.isEmpty()) {
+            countries.insert(item.country);
         }
     }
-    endResetModel();
+    QStringList result = countries.values();
+    result.sort();
+    result.prepend("Todos");
+    return result;
 }

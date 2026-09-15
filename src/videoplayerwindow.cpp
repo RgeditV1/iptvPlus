@@ -1,4 +1,5 @@
 #include "videoplayerwindow.hpp"
+#include "torrentengine.hpp"
 #include "mpvplayer.hpp"
 
 #include <QHBoxLayout>
@@ -27,11 +28,9 @@ VideoPlayerWindow::VideoPlayerWindow(QWidget* parent)
     m_controlsHideTimer->setSingleShot(true);
 
     connect(m_controlsHideTimer, &QTimer::timeout, this, [this]() {
-        // No ocultar si el ratón sigue dentro del área de controles
         if (m_isFullscreen && m_controlsWidget && !m_controlsWidget->underMouse()) {
             m_controlsWidget->hide();
         } else if (m_isFullscreen) {
-            // Reiniciar el timer si el usuario aún interactúa con la barra
             resetControlsHideTimer();
         }
     });
@@ -71,6 +70,7 @@ void VideoPlayerWindow::onBufferingChanged(bool buffering)
 {
     if (buffering) {
         m_loadingSpinner->show();
+        m_loadingSpinner->raise();
     } else {
         m_loadingSpinner->hide();
     }
@@ -87,7 +87,7 @@ void VideoPlayerWindow::handlePlaybackError(const QString& error)
     if (m_subtitlesMenu) m_subtitlesMenu->clear();
 
     if (m_errorLabel) {
-        m_errorLabel->setText(QString("Error de conexión/reproducción: %1").arg(error));
+        m_errorLabel->setText(QString("Error de reproducción: %1").arg(error));
         m_errorLabel->show();
     }
 }
@@ -98,9 +98,7 @@ void VideoPlayerWindow::setupUi()
     m_mainLayout->setContentsMargins(0, 0, 0, 0);
     m_mainLayout->setSpacing(0);
 
-    // ----------------------------------------
-    // Área de vídeo
-    // ----------------------------------------
+    // --- Video Widget & Overlay ---
     m_videoWidget = new QWidget(this);
     m_videoWidget->setMinimumSize(320, 180);
     m_videoWidget->setAttribute(Qt::WA_NativeWindow);
@@ -149,29 +147,64 @@ void VideoPlayerWindow::setupUi()
 
     m_mainLayout->addWidget(m_videoWidget, 1);
 
-    // ----------------------------------------
-    // Timeline
-    // ----------------------------------------
+    // Timeline Slider
     m_timeline = new QSlider(Qt::Horizontal, this);
     m_timeline->setRange(0, 1000);
     m_timeline->setValue(0);
     m_mainLayout->addWidget(m_timeline);
 
-    // ----------------------------------------
     // Controles
-    // ----------------------------------------
     m_controlsWidget = new QWidget(this);
     m_controlsWidget->setMouseTracking(true);
     m_controlsWidget->installEventFilter(this);
+    m_controlsWidget->setStyleSheet(
+        "QWidget {"
+        "   background-color: #181825;"
+        "   border: 1px solid #45475a;"
+        "   border-radius: 8px;"
+        "}"
+        "QPushButton {"
+        "   background-color: transparent;"
+        "   border: none;"
+        "   padding: 4px;"
+        "}"
+        "QPushButton:hover {"
+        "   background-color: #313244;"
+        "   border-radius: 4px;"
+        "}"
+    );
 
     m_controlsLayout = new QHBoxLayout(m_controlsWidget);
-    m_controlsLayout->setContentsMargins(8, 4, 8, 4);
+    m_controlsLayout->setContentsMargins(12, 6, 12, 6);
 
     m_currentTimeLabel = new QLabel("00:00", this);
     m_durationLabel = new QLabel("00:00", this);
 
+    // Etiqueta LIVE para modo TV
+    m_liveLabel = new QLabel("LIVE", this);
+    m_liveLabel->setStyleSheet(
+        "QLabel {"
+        "   color: #ff5555;"
+        "   font-weight: bold;"
+        "   font-size: 13px;"
+        "   background-color: rgba(255, 85, 85, 0.2);"
+        "   padding: 2px 8px;"
+        "   border-radius: 4px;"
+        "   border: 1px solid #ff5555;"
+        "}"
+    );
+    m_liveLabel->hide();
+
     m_playButton = new QPushButton(this);
     m_playButton->setIcon(QIcon(":/resources/icons/play.svg"));
+
+    m_skipBackButton = new QPushButton(this);
+    m_skipBackButton->setIcon(QIcon(":/resources/icons/skip-back.svg"));
+    m_skipBackButton->setToolTip("Canal Anterior");
+
+    m_skipForwardButton = new QPushButton(this);
+    m_skipForwardButton->setIcon(QIcon(":/resources/icons/skip-forward.svg"));
+    m_skipForwardButton->setToolTip("Siguiente Canal");
 
     m_stopButton = new QPushButton(this);
     m_stopButton->setIcon(QIcon(":/resources/icons/stop-circle.svg"));
@@ -197,7 +230,7 @@ void VideoPlayerWindow::setupUi()
     m_volumeSlider->installEventFilter(this);
 
     m_audioButton = new QPushButton(this);
-    m_audioButton->setIcon(QIcon(":/resources/icons/headphones.svg")); 
+    m_audioButton->setIcon(QIcon(":/resources/icons/headphones.svg"));
     m_audioButton->setToolTip("Pistas de Audio");
     m_audioMenu = new QMenu(this);
     m_audioButton->setMenu(m_audioMenu);
@@ -211,22 +244,100 @@ void VideoPlayerWindow::setupUi()
     m_fullscreenButton = new QPushButton(this);
     m_fullscreenButton->setIcon(QIcon(":/resources/icons/maximize.svg"));
 
+    // Construcción del Playbar Layout
+    m_controlsLayout->addWidget(m_liveLabel);
     m_controlsLayout->addWidget(m_currentTimeLabel);
+    m_controlsLayout->addWidget(m_skipBackButton);
     m_controlsLayout->addWidget(m_playButton);
+    m_controlsLayout->addWidget(m_skipForwardButton);
     m_controlsLayout->addWidget(m_stopButton);
     m_controlsLayout->addWidget(m_volumeButton);
     m_controlsLayout->addWidget(m_volumeSlider);
     m_controlsLayout->addWidget(m_audioButton);
     m_controlsLayout->addWidget(m_subtitlesButton);
     m_controlsLayout->addWidget(m_durationLabel);
+
     m_controlsLayout->addStretch();
+
     m_controlsLayout->addWidget(m_fullscreenButton);
 
     m_mainLayout->addWidget(m_controlsWidget);
 }
 
+void VideoPlayerWindow::setTvMode(bool isTv)
+{
+    m_isTvMode = isTv;
+
+    // En modo TV ocultamos el slider de tiempo y timestamps, y mostramos LIVE
+    m_timeline->setVisible(!isTv);
+    m_currentTimeLabel->setVisible(!isTv);
+    m_durationLabel->setVisible(!isTv);
+
+    if (m_liveLabel) {
+        m_liveLabel->setVisible(isTv);
+    }
+
+    // Botones opcionales de salto de canal / avance rápido
+    if (m_skipBackButton) m_skipBackButton->setVisible(!isTv);
+    if (m_skipForwardButton) m_skipForwardButton->setVisible(!isTv);
+}
+
 void VideoPlayerWindow::setupConnections()
 {
+
+    connect(m_skipBackButton, &QPushButton::clicked, this, [this]() {
+        emit previousChannelRequested();
+    });
+
+    connect(m_skipForwardButton, &QPushButton::clicked, this, [this]() {
+        emit nextChannelRequested();
+    });
+
+    // Mostrar la hora dinámicamente mientras se arrastra el slider
+    connect(m_timeline, &QSlider::sliderMoved, this, [this](int value) {
+        if (!m_player) return;
+        const double duration = m_player->duration();
+        if (duration <= 0.0) return;
+
+        const double targetSeconds = duration * (value / 1000.0);
+        const int totalSeconds = static_cast<int>(targetSeconds);
+        const int hours = totalSeconds / 3600;
+        const int minutes = (totalSeconds % 3600) / 60;
+        const int seconds = totalSeconds % 60;
+
+        if (hours > 0) {
+            m_currentTimeLabel->setText(QString("%1:%2:%3")
+                .arg(hours, 2, 10, QChar('0'))
+                .arg(minutes, 2, 10, QChar('0'))
+                .arg(seconds, 2, 10, QChar('0')));
+        } else {
+            m_currentTimeLabel->setText(QString("%1:%2")
+                .arg(minutes, 2, 10, QChar('0'))
+                .arg(seconds, 2, 10, QChar('0')));
+        }
+    });
+
+    connect(m_timeline, &QSlider::sliderReleased, this, [this]() {
+        if (!m_player) return;
+
+        const double duration = m_player->duration();
+        if (duration <= 0.0) return;
+
+        const double position = duration * (m_timeline->value() / 1000.0);
+
+        if (m_loadingSpinner) m_loadingSpinner->show();
+
+        if (m_torrentEngine && m_torrentEngine->fileSize() > 0) {
+            const qint64 byteOffset = static_cast<qint64>((position / duration) * m_torrentEngine->fileSize());
+            
+            // Priorizar el fragmento del seek
+            m_torrentEngine->prioritizeRange(byteOffset, byteOffset + (30 * 1024 * 1024));
+        }
+
+        // Realizar la búsqueda por keyframe
+        m_player->seek(position);
+    });
+
     connect(m_audioButton, &QPushButton::clicked, this, [this]() {
         if (m_audioMenu && !m_audioMenu->isEmpty()) {
             m_audioMenu->exec(m_audioButton->mapToGlobal(QPoint(0, -m_audioMenu->sizeHint().height())));
@@ -261,14 +372,6 @@ void VideoPlayerWindow::setupConnections()
         } else {
             updateVolumeIcon(m_player->volume());
         }
-    });
-
-    connect(m_timeline, &QSlider::sliderReleased, this, [this]() {
-        if (!m_player) return;
-        const double duration = m_player->duration();
-        if (duration <= 0.0) return;
-        const double position = duration * m_timeline->value() / 1000.0;
-        m_player->seek(position);
     });
 }
 
@@ -381,7 +484,6 @@ void VideoPlayerWindow::resetControlsHideTimer()
 
 void VideoPlayerWindow::play(const QString& url)
 {
-
     if (!m_player || url.isEmpty()) return;
 
     if (m_errorLabel) m_errorLabel->hide();
@@ -413,6 +515,8 @@ void VideoPlayerWindow::stop()
     m_isPlaying = false;
     m_playButton->setIcon(QIcon(":/resources/icons/play.svg"));
     m_timeline->setValue(0);
+    m_currentTimeLabel->setText("00:00");
+    m_durationLabel->setText("00:00");
 
     if (m_audioMenu) m_audioMenu->clear();
     if (m_subtitlesMenu) m_subtitlesMenu->clear();
@@ -492,6 +596,11 @@ void VideoPlayerWindow::updatePosition(double position)
 {
     if (!m_player) return;
 
+    // Quitar spiner si el video ya está avanzando
+    if (m_loadingSpinner && m_loadingSpinner->isVisible()) {
+        m_loadingSpinner->hide();
+    }
+
     const double duration = m_player->duration();
 
     if (duration <= 0.0) {
@@ -508,18 +617,26 @@ void VideoPlayerWindow::updatePosition(double position)
     }
 
     const int totalSeconds = static_cast<int>(position);
-    const int minutes = totalSeconds / 60;
+    const int hours = totalSeconds / 3600;
+    const int minutes = (totalSeconds % 3600) / 60;
     const int seconds = totalSeconds % 60;
 
-    m_currentTimeLabel->setText(
-        QString("%1:%2")
+    if (hours > 0) {
+        m_currentTimeLabel->setText(QString("%1:%2:%3")
+            .arg(hours, 2, 10, QChar('0'))
             .arg(minutes, 2, 10, QChar('0'))
-            .arg(seconds, 2, 10, QChar('0'))
-    );
+            .arg(seconds, 2, 10, QChar('0')));
+    } else {
+        m_currentTimeLabel->setText(QString("%1:%2")
+            .arg(minutes, 2, 10, QChar('0'))
+            .arg(seconds, 2, 10, QChar('0')));
+    }
 }
 
 void VideoPlayerWindow::updateDuration(double duration)
 {
+    if (m_isTvMode) return; // No actualizar timeline en transmisiones en vivo
+
     if (duration <= 0.0) {
         m_durationLabel->setText("LIVE");
         m_timeline->setEnabled(false);
@@ -530,14 +647,29 @@ void VideoPlayerWindow::updateDuration(double duration)
     m_timeline->setEnabled(true);
 
     const int totalSeconds = static_cast<int>(duration);
-    const int minutes = totalSeconds / 60;
+    const int hours = totalSeconds / 3600;
+    const int minutes = (totalSeconds % 3600) / 60;
     const int seconds = totalSeconds % 60;
 
-    m_durationLabel->setText(
-        QString("%1:%2")
+    if (hours > 0) {
+        m_durationLabel->setText(QString("%1:%2:%3")
+            .arg(hours, 2, 10, QChar('0'))
             .arg(minutes, 2, 10, QChar('0'))
-            .arg(seconds, 2, 10, QChar('0'))
-    );
+            .arg(seconds, 2, 10, QChar('0')));
+    } else {
+        m_durationLabel->setText(QString("%1:%2")
+            .arg(minutes, 2, 10, QChar('0'))
+            .arg(seconds, 2, 10, QChar('0')));
+    }
+
+    //m_timeline->setValue(static_cast<int>(position));
+}
+
+void VideoPlayerWindow::resetTimeline()
+{
+    m_timeline->setValue(0);
+    m_currentTimeLabel->setText("00:00");
+    m_durationLabel->setText("00:00");
 }
 
 void VideoPlayerWindow::resume()

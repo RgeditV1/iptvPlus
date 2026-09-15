@@ -3,14 +3,16 @@
 #include "torrentengine.hpp"
 
 #include <QApplication>
-#include <QFile>
-#include <QTextStream>
+#include <QCommandLineParser>
 #include <QDateTime>
-#include <QDir>
 #include <iostream>
 #include <csignal>
 
-#include <csignal>
+#ifdef Q_OS_WIN
+#include <windows.h>
+#endif
+
+static bool g_verboseMode = false;
 
 void signalHandler(int signal)
 {
@@ -21,45 +23,66 @@ void signalHandler(int signal)
 
 void customLogHandler(QtMsgType type, const QMessageLogContext &context, const QString &msg)
 {
-    // Construir la ruta directamente en la carpeta del ejecutable
-    QString logPath = QCoreApplication::applicationDirPath() + "/app.log";
-    QFile logFile(logPath);
+    Q_UNUSED(context);
 
-    if (logFile.open(QIODevice::WriteOnly | QIODevice::Append | QIODevice::Text)) {
-        QTextStream stream(&logFile);
-        QString timeStr = QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss");
-        
-        QString typeStr;
-        switch (type) {
-            case QtDebugMsg:    typeStr = "[DEBUG]"; break;
-            case QtWarningMsg:  typeStr = "[WARN] "; break;
-            case QtCriticalMsg: typeStr = "[CRIT] "; break;
-            case QtFatalMsg:    typeStr = "[FATAL]"; break;
-            case QtInfoMsg:     typeStr = "[INFO] "; break;
+    if (!g_verboseMode) {
+        if (type != QtWarningMsg && type != QtCriticalMsg && type != QtFatalMsg) {
+            return;
         }
-
-        QString formattedMsg = QString("[%1] %2 %3").arg(timeStr, typeStr, msg);
-        stream << formattedMsg << "\n";
-        
-        std::cout << formattedMsg.toStdString() << std::endl;
     }
+
+    QString timeStr = QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss");
+    
+    QString typeStr;
+    switch (type) {
+        case QtDebugMsg:    typeStr = "[DEBUG]"; break;
+        case QtInfoMsg:     typeStr = "[INFO] "; break;
+        case QtWarningMsg:  typeStr = "[WARN] "; break;
+        case QtCriticalMsg: typeStr = "[CRIT] "; break;
+        case QtFatalMsg:    typeStr = "[FATAL]"; break;
+    }
+
+    QString formattedMsg = QString("[%1] %2 %3").arg(timeStr, typeStr, msg);
+
+    std::cout << formattedMsg.toStdString() << std::endl;
 }
 
 int main(int argc, char* argv[])
 {
     QApplication app(argc, argv);
 
+    // Adjuntar la consola si se ejecutó desde una terminal existente (Windows)
+    bool launchedFromCmd = false;
+#ifdef Q_OS_WIN
+    if (AttachConsole(ATTACH_PARENT_PROCESS)) {
+        freopen("CONOUT$", "w", stdout);
+        freopen("CONOUT$", "w", stderr);
+        launchedFromCmd = true;
+    }
+#endif
+
+    // Parser de argumentos por consola
+    QCommandLineParser parser;
+    parser.setApplicationDescription("iptvPlus Media Player");
+    parser.addHelpOption();
+    
+    QCommandLineOption verboseOption(QStringList() << "v" << "verbose", "Activa el modo verbose con todos los logs en consola.");
+    parser.addOption(verboseOption);
+    parser.process(app);
+
+    // Determinar si se activa el modo verbose completo
+    g_verboseMode = launchedFromCmd || parser.isSet(verboseOption);
+
+    // Registrar el handler global de logs
+    qInstallMessageHandler(customLogHandler);
+
     TorrentEngine::cleanTempDirectory();
 
-    
     std::signal(SIGINT, signalHandler);
     std::signal(SIGTERM, signalHandler);
 
-    // Activar el log handler
-    //qInstallMessageHandler(customLogHandler);
-
     qDebug() << "========================================";
-    qDebug() << "Iniciando iptvPlus...";
+    qDebug() << "Iniciando iptvPlus... (Verbose:" << (g_verboseMode ? "SI" : "NO") << ")";
 
     if (!DatabaseManager::instance().initDatabase()) {
         qWarning("No se pudo conectar a la base de datos SQLite.");
@@ -68,5 +91,13 @@ int main(int argc, char* argv[])
     MainWindow window;
     window.show();
 
-    return app.exec();
+    int exitCode = app.exec();
+
+#ifdef Q_OS_WIN
+    if (launchedFromCmd) {
+        FreeConsole();
+    }
+#endif
+
+    return exitCode;
 }
