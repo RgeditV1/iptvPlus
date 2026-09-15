@@ -4,33 +4,17 @@
 #include <QVBoxLayout>
 #include <QMouseEvent>
 #include <QRandomGenerator>
+#include <QComboBox>
 #include <QDebug>
 
 TvWidget::TvWidget(QWidget* parent)
     : QWidget(parent)
 {
+    m_updateNotifier = new UpdateNotifier(this);
+
     setupUi();
     setupRightSidebar();
 
-    // Actualizador para descargar canales de iptv-org
-    m_updateNotifier = new UpdateNotifier(this);
-    
-    connect(m_updateNotifier, &UpdateNotifier::remoteChannelsLoaded,
-                this, [this](const QList<M3UItem>& channels) {
-                    m_channelModel->setChannels(channels);
-
-                    if (!channels.isEmpty()) {
-                        int randomIndex = QRandomGenerator::global()->bounded(channels.size());
-                        const M3UItem& randomChannel = channels.at(randomIndex);
-                        
-                        if (!randomChannel.url.isEmpty()) {
-                            qDebug() << "[TvWidget] Canal al azar seleccionado:" << randomChannel.title;
-                            m_player->play(randomChannel.url);
-                        }
-                    }
-                });
-
-    // Cargar canales en segundo plano
     m_updateNotifier->fetchRemoteStreams();
 
     setMouseTracking(true);
@@ -72,7 +56,7 @@ void TvWidget::setupRightSidebar()
     m_rightSidebar = new QWidget(this);
     m_rightSidebar->setStyleSheet(
         "QWidget { background-color: #1e1e2e; color: #ffffff; }"
-        "QLineEdit {"
+        "QLineEdit, QComboBox {"
         "   background-color: #313244;"
         "   color: #cdd6f4;"
         "   border: 1px solid #45475a;"
@@ -80,7 +64,12 @@ void TvWidget::setupRightSidebar()
         "   padding: 6px 10px;"
         "   font-size: 13px;"
         "}"
-        "QLineEdit:focus { border: 1px solid #89b4fa; }"
+        "QComboBox::drop-down { border: none; }"
+        "QComboBox QAbstractItemView {"
+        "   background-color: #181825;"
+        "   color: #cdd6f4;"
+        "   selection-background-color: #45475a;"
+        "}"
         "QListView {"
         "   background-color: #181825;"
         "   border: none;"
@@ -99,10 +88,12 @@ void TvWidget::setupRightSidebar()
     sidebarLayout->setContentsMargins(10, 10, 10, 10);
     sidebarLayout->setSpacing(8);
 
-    // QLineEdit para filtrar canales por texto
     m_searchBox = new QLineEdit(m_rightSidebar);
     m_searchBox->setPlaceholderText("Buscar canal...");
     sidebarLayout->addWidget(m_searchBox);
+
+    QComboBox* countryCombo = new QComboBox(m_rightSidebar);
+    sidebarLayout->addWidget(countryCombo);
 
     m_channelModel = new ChannelListModel(this);
     m_channelListView = new QListView(m_rightSidebar);
@@ -110,14 +101,41 @@ void TvWidget::setupRightSidebar()
     m_channelListView->setIconSize(QSize(20, 20));
     sidebarLayout->addWidget(m_channelListView);
 
-    // Conexiones de búsqueda y selección de canales
+    // Conexiones de búsqueda y filtros
     connect(m_searchBox, &QLineEdit::textChanged,
             m_channelModel, &ChannelListModel::filter);
+
+    connect(countryCombo, &QComboBox::currentTextChanged,
+            m_channelModel, &ChannelListModel::filterByCountry);
 
     connect(m_channelListView, &QListView::clicked,
             this, &TvWidget::onChannelClicked);
 
-    // Posición inicial fuera de pantalla (lado derecho)
+    // Respuesta a la carga remota de canales
+    connect(m_updateNotifier, &UpdateNotifier::remoteChannelsLoaded,
+            this, [countryCombo, this](const QList<M3UItem>& channels) {
+                m_channelModel->setChannels(channels);
+
+                countryCombo->blockSignals(true);
+                countryCombo->clear();
+                countryCombo->addItems(m_channelModel->getAvailableCountries());
+                countryCombo->setCurrentIndex(0);
+                countryCombo->blockSignals(false);
+
+                if (!channels.isEmpty()) {
+                    int randomIndex = QRandomGenerator::global()->bounded(m_channelModel->rowCount());
+                    QModelIndex targetIndex = m_channelModel->index(randomIndex, 0);
+                    
+                    m_channelListView->setCurrentIndex(targetIndex);
+                    
+                    const M3UItem* randomChannel = m_channelModel->channelAt(randomIndex);
+                    if (randomChannel && !randomChannel->url.isEmpty()) {
+                        m_player->play(randomChannel->url);
+                    }
+                }
+            });
+
+    // Configuración visual de la barra lateral
     m_rightSidebar->setGeometry(width(), 0, m_sidebarWidth, height());
     m_rightSidebar->raise();
 
@@ -127,6 +145,10 @@ void TvWidget::setupRightSidebar()
 
 void TvWidget::onChannelClicked(const QModelIndex& index)
 {
+    if (!index.isValid()) return;
+
+    m_channelListView->setCurrentIndex(index);
+
     const M3UItem* channel = m_channelModel->channelAt(index.row());
     if (channel && !channel->url.isEmpty()) {
         m_player->play(channel->url);
@@ -161,11 +183,9 @@ bool TvWidget::eventFilter(QObject* watched, QEvent* event)
             auto* mouseEvent = static_cast<QMouseEvent*>(event);
             int mouseX = mouseEvent->pos().x();
 
-            // Abrir al colocar el mouse cerca del borde derecho (<= 20 px)
             if (!m_sidebarVisible && mouseX >= (width() - 20)) {
                 toggleRightSidebar(true);
             }
-            // Ocultar cuando el mouse sale de la barra lateral
             else if (m_sidebarVisible && mouseX < (width() - m_sidebarWidth)) {
                 toggleRightSidebar(false);
             }

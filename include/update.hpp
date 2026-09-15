@@ -1,14 +1,15 @@
 #pragma once
 
-#include <QObject>
-#include <QNetworkAccessManager>
-#include <QNetworkRequest>
-#include <QNetworkReply>
-#include <QJsonDocument>
+#include <QFileInfo>
 #include <QJsonArray>
+#include <QJsonDocument>
 #include <QJsonObject>
+#include <QNetworkReply>
+#include <QNetworkRequest>
+#include <QRegularExpression>
 #include <QUrl>
-#include <QDebug>
+#include <memory>
+
 #include "m3uparser.hpp"
 
 class UpdateNotifier : public QObject {
@@ -55,19 +56,32 @@ public:
                 QString fileName = fileObj["name"].toString();
                 QString downloadUrl = fileObj["download_url"].toString();
 
-                if (fileName.endsWith(".m3u") || fileName.endsWith(".m3u8")) {
+                if (fileName.endsWith(".m3u", Qt::CaseInsensitive) || fileName.endsWith(".m3u8", Qt::CaseInsensitive)) {
                     (*pendingRequests)++;
 
+                    // Remover extensión .m3u / .m3u8 del "name" para usarlo como país/categoría fallback
+                    QString countryName = fileName;
+                    countryName.remove(QRegularExpression("\\.m3u8?$", QRegularExpression::CaseInsensitiveOption));
+                    countryName = countryName.toUpper();
+
                     QNetworkRequest fileRequest((QUrl(downloadUrl)));
+                    fileRequest.setHeader(QNetworkRequest::UserAgentHeader, "IPTV-Plus-App");
+                    
                     QNetworkReply* fileReply = networkManager->get(fileRequest);
 
-                    connect(fileReply, &QNetworkReply::finished, this, [this, fileReply, pendingRequests, allChannels]() {
+                    connect(fileReply, &QNetworkReply::finished, this, [this, fileReply, pendingRequests, allChannels, countryName]() {
                         fileReply->deleteLater();
 
                         if (fileReply->error() == QNetworkReply::NoError) {
                             QString m3uContent = QString::fromUtf8(fileReply->readAll());
                             M3UParser parser;
-                            allChannels->append(parser.parseContent(m3uContent));
+                            
+                            // Se pasa countryName como valor predeterminado si no hay tvg-country o group-title
+                            QList<M3UItem> parsedChannels = parser.parseContent(m3uContent, countryName);
+
+                            allChannels->append(parsedChannels);
+                        } else {
+                            qWarning() << "[UpdateNotifier] Error al descargar lista para país" << countryName << ":" << fileReply->errorString();
                         }
 
                         (*pendingRequests)--;
@@ -76,10 +90,10 @@ public:
                             qDebug() << "[UpdateNotifier] Descarga remota finalizada. Total de canales cargados:" << allChannels->size();
                             emit remoteChannelsLoaded(*allChannels);
                         }
-                        });
+                    });
                 }
             }
-            });
+        });
     }
 
 signals:

@@ -243,17 +243,38 @@ void TorrentEngine::prioritizeRange(qint64 startByte, qint64 endByte)
     const auto& fs = info->layout();
     const libtorrent::file_index_t fileIndex(m_videoFileIndex);
 
-    // Mapear bytes del archivo a piezas del torrent
+    // Asegurar que el byte no exceda los límites del archivo
+    startByte = qBound<qint64>(0, startByte, m_fileSize - 1);
+
+    // Mapear el byte de inicio a su índice de pieza correspondiente
     const auto firstPiece = fs.map_file(fileIndex, startByte, 1).piece;
-    const auto lastPiece = fs.map_file(fileIndex, std::min(endByte, m_fileSize - 1), 1).piece;
 
-    // Límite de 15 piezas hacia adelante
-    const auto maxPiece = std::min(lastPiece, firstPiece + libtorrent::piece_index_t::diff_type(15));
+    // Obtener el total de piezas del torrent de forma fuertemente tipada
+    const libtorrent::piece_index_t totalPieces(fs.num_pieces());
 
-    // Iterar asignando la prioridad más alta a las piezas requeridas
-    for (auto piece = firstPiece; piece <= maxPiece; ++piece) {
-        if (!m_handle.have_piece(piece)) {
-            m_handle.set_piece_deadline(piece, 50); // Prioridad alta inmediata
+    // Limpiar deadlines viejos
+    m_handle.clear_piece_deadlines();
+
+    constexpr int IMMEDIATE_PIECES = 10;
+    constexpr int AHEAD_PIECES = 40;
+
+    // Prioridad inmediata (0-50ms) para los primeros bloques
+    for (int i = 0; i < IMMEDIATE_PIECES; ++i) {
+        const auto piece = firstPiece + libtorrent::piece_index_t::diff_type(i);
+        
+        // Comparación correcta entre dos tipos 'piece_index_t'
+        if (piece < totalPieces && !m_handle.have_piece(piece)) {
+            m_handle.set_piece_deadline(piece, 50 + (i * 10), libtorrent::torrent_handle::alert_when_available);
+        }
+    }
+
+    // Piezas secundarias de buffering continuo
+    for (int i = IMMEDIATE_PIECES; i < AHEAD_PIECES; ++i) {
+        const auto piece = firstPiece + libtorrent::piece_index_t::diff_type(i);
+        
+        // Comparación correcta entre dos tipos 'piece_index_t'
+        if (piece < totalPieces && !m_handle.have_piece(piece)) {
+            m_handle.set_piece_deadline(piece, 500 + (i * 20));
         }
     }
 }
