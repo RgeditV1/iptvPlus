@@ -5,6 +5,29 @@ TMDB_API_KEY = os.environ.get("TMDB_API_KEY", "123b8afffe2428799cc508f55848a789"
 BASE_URL = "https://api.themoviedb.org/3"
 TMDB_IMG_BASE = "https://image.tmdb.org/t/p"
 
+# Mapa local de respaldo ID -> Nombre de género
+GENRE_ID_TO_NAME = {
+    28: "Acción",
+    12: "Aventura",
+    16: "Animación",
+    35: "Comedia",
+    80: "Crimen",
+    99: "Documental",
+    18: "Drama",
+    10751: "Familia",
+    14: "Fantasía",
+    36: "Historia",
+    27: "Terror",
+    10402: "Música",
+    9648: "Misterio",
+    10749: "Romance",
+    878: "Ciencia ficción",
+    10770: "Película de TV",
+    53: "Suspenso",
+    10752: "Bélico",
+    37: "Western"
+}
+
 GENRE_MAP = {
     "acción": 28, "accion": 28, "action": 28,
     "aventura": 12, "adventure": 12,
@@ -62,6 +85,10 @@ def _parse_tmdb_results(results: list, limit: int = 10) -> list[dict]:
         year_str = release_date[:4] if release_date else ""
         year = int(year_str) if year_str.isdigit() else None
 
+        # --- EXTRACCIÓN DE GÉNEROS ---
+        genre_ids = item.get("genre_ids", [])
+        genres = [GENRE_ID_TO_NAME[gid] for gid in genre_ids if gid in GENRE_ID_TO_NAME]
+
         trailer = _get_trailer_url(tmdb_id) if tmdb_id else None
 
         parsed.append({
@@ -73,6 +100,7 @@ def _parse_tmdb_results(results: list, limit: int = 10) -> list[dict]:
             "rating": item.get("vote_average", 0.0),
             "year": year,
             "release_year": year,
+            "genres": genres,
             "trailer": trailer
         })
     return parsed
@@ -96,14 +124,14 @@ def get_imdb_id(tmdb_id: int) -> str | None:
         return None
 
 def search_tmdb_movies(query: str, limit: int = 10) -> list[dict]:
-    """Busca películas directamente en TMDB en español."""
+    """Busca películas directamente en TMDB"""
     url = f"{BASE_URL}/search/movie"
     params = {
         "api_key": TMDB_API_KEY,
         "query": query,
         "language": "es-ES",
         "page": 1,
-        "include_adult": "false"
+        "include_adult": "true"
     }
     response = requests.get(url, params=params, timeout=15)
     response.raise_for_status()

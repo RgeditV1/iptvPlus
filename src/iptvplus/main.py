@@ -118,7 +118,9 @@ def main():
         
         print(f"\n--- Películas Guardadas en DB ({len(movies)}) ---")
         for m in movies:
+            genres_str = ", ".join(m.get("genres", [])) or "N/A"
             print(f"\n[ID: {m['id']}] {m['title']} ({m.get('year', 'N/A')})")
+            print(f"  Géneros: {genres_str}")
             print(f"  Rating: {m.get('rating', 'N/A')}")
             print(f"  Poster: {m.get('poster', 'N/A')}")
             print(f"  URL: {m.get('url', 'N/A')}")
@@ -149,23 +151,25 @@ def main():
     print(f"\nSe encontraron {len(movies)} resultados:\n")
 
     for idx, movie in enumerate(movies, 1):
-            print(f"{idx}. {movie['title']} ({movie.get('year', 'N/A')})")
-            print(f"   TMDB ID: {movie.get('id')}")
-            print(f"   Rating: {movie.get('rating', 'N/A')}")
-            print(f"   Poster: {movie.get('poster', 'N/A')}")
-            print(f"   Tráiler: {movie.get('trailer', 'N/A')}")
-            
-            streams = movie.get("streams", [])
-            if streams:
-                print(f"   Fuentes / Magnets ({len(streams)}):")
-            else:
-                print("   Fuentes / Magnets: No se encontraron torrents disponibles.")
+        genres_str = ", ".join(movie.get("genres", [])) or "N/A"
+        print(f"{idx}. {movie['title']} ({movie.get('year', 'N/A')})")
+        print(f"   TMDB ID: {movie.get('id')}")
+        print(f"   Géneros: {genres_str}")
+        print(f"   Rating: {movie.get('rating', 'N/A')}")
+        print(f"   Poster: {movie.get('poster', 'N/A')}")
+        print(f"   Tráiler: {movie.get('trailer', 'N/A')}")
+        
+        streams = movie.get("streams", [])
+        if streams:
+            print(f"   Fuentes / Magnets ({len(streams)}):")
+        else:
+            print("   Fuentes / Magnets: No se encontraron torrents disponibles.")
 
-            if args.save:
-                save_movie(movie)
-                print("   -> Guardada en DB.")
+        if args.save:
+            save_movie(movie)
+            print("   -> Guardada en DB.")
 
-            print("-" * 50)
+        print("-" * 50)
 
 
 if __name__ == "__main__":
