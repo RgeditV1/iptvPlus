@@ -61,6 +61,8 @@ set(PROJECT_SOURCES
 
     # Torrent Engine
     src/torrentengine.cpp
+    src/httpstreamserver.cpp
+    include/httpstreamserver.hpp
     include/torrentengine.hpp
 
     # MPV

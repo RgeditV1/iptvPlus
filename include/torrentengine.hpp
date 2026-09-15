@@ -7,6 +7,7 @@
 #include <QFile>
 #include <QObject>
 #include <QTimer>
+#include <QByteArray>
 
 #include <memory>
 
@@ -23,6 +24,11 @@ public:
     static void cleanTempDirectory();
 
     QString videoFilePath() const;
+    qint64 fileSize() const;
+
+    // Métodos para interacción con el servidor HTTP Stream
+    void prioritizeRange(qint64 startByte, qint64 endByte);
+    QByteArray readBytesSynchronous(qint64 offset, qint64 length);
 
 signals:
     void metadataLoaded(const QString& fileName, qint64 fileSize);
@@ -40,7 +46,6 @@ private:
     void prioritizeStreamingPieces();
 
     void processTorrentAlerts();
-    void processReadPieceAlert(const libtorrent::read_piece_alert* alert);
 
 private:
     // Core libtorrent elements
@@ -51,7 +56,7 @@ private:
     QTimer* m_statusTimer = nullptr;
     QTimer* m_timeoutTimer = nullptr;
 
-    // ruta TEMP
+    // Ruta de archivo
     QString m_videoFilePath;
 
     int m_videoFileIndex = -1;
